@@ -1,0 +1,34 @@
+<!--
+  The Passimo mark, as a scalable icon for the PWA manifest.
+
+  The same three strokes `components/brand-mark.tsx` draws in the product, so the
+  installed app's home-screen icon and the logo in its header are the same thing.
+  The previous file here was a leftover template mark from the project scaffold
+  and belonged to neither brand.
+
+  Colours invert with the system theme so the tile keeps contrast against both a
+  light and a dark home screen.
+-->
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .background { fill: #1c1917; }
+    .foreground { stroke: #fefdfb; }
+    @media (prefers-color-scheme: dark) {
+      .background { fill: #fefdfb; }
+      .foreground { stroke: #1c1917; }
+    }
+  </style>
+  <rect class="background" width="180" height="180" rx="37" />
+  <g
+    class="foreground"
+    fill="none"
+    stroke-width="18"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    transform="translate(30 30) scale(5)"
+  >
+    <path d="M4 20V6a2 2 0 0 1 2-2h12" />
+    <path d="M4 12h11" />
+    <circle cx="17" cy="16" r="4" />
+  </g>
+</svg>

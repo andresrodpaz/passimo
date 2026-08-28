@@ -1,0 +1,4 @@
+{
+  "//": "Marks this directory as ES modules so Node does not have to reparse the seed script as CommonJS first. Scoped here rather than in the root package.json, which Next.js reads.",
+  "type": "module"
+}

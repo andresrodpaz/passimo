@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  # Non-secret values, needed because several modules read them at request time.
+  # A CI secret would add nothing: nothing here signs anything a user will hold.
+  APP_TOKEN_SECRET: ci-only-test-secret-value-0123456789abcdef
+  AUTH_SESSION_SECRET: ci-only-session-secret-value-abcdef0123456789
+  CRON_SECRET: ci-only-cron-secret
+
+jobs:
+  verify:
+    name: Typecheck, lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # No database: the unit suite must stay runnable with nothing but Node, or
+      # people stop running it.
+      - name: Unit tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The build must succeed with no secret and no database configured: a
+      # missing integration has to degrade gracefully, never break the
+      # deployment. Nothing in lib/env.ts is read at module scope for this reason.
+      - name: Build
+        run: pnpm build
+
+  database:
+    name: Migrations, seed & integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: passimo
+          POSTGRES_USER: passimo
+          POSTGRES_PASSWORD: passimo
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://passimo:passimo@localhost:5432/passimo
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NODE_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The claim being tested: a fresh PostgreSQL database initialises from this
+      # repository alone. No provider, no manual step, no stubbed schema — the
+      # previous version of this job had to create a fake `auth` schema before
+      # the migrations would apply, which meant CI was never proving what a
+      # restore would actually do.
+      - name: Apply migrations to an empty database
+        run: pnpm db:migrate
+
+      # Idempotence: a second run must find nothing to do. Catches a migration
+      # that is not safely re-runnable, which is what a retried deploy performs.
+      - name: Re-run migrations (must be a no-op)
+        run: pnpm db:migrate | tee /tmp/second.log && grep -q "up to date" /tmp/second.log
+
+      - name: Seed the demo environment
+        run: pnpm seed:demo
+
+      # Real PostgreSQL, no mocks: the query layer, the auth lifecycle, tenant
+      # isolation and the whole loyalty transaction.
+      - name: Integration tests
+        run: pnpm test:integration
+
+      # Proves `db:reset` — and therefore a restore from scratch — still works.
+      - name: Reset and re-apply from scratch
+        run: pnpm db:reset
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    needs: build
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: passimo
+          POSTGRES_USER: passimo
+          POSTGRES_PASSWORD: passimo
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://passimo:passimo@localhost:5432/passimo
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.16.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e:install
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Build
+        run: pnpm build
+
+      # Both viewports. The counter is used on a phone at a till and the review
+      # screens on a desktop, and the two have different failure modes.
+      - name: Run Playwright
+        run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
