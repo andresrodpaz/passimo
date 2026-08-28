@@ -1210,6 +1210,21 @@ export const en = {
     designHint: 'Colours, logo and layout. Changes appear in the preview instantly.',
     behaviourHint: 'When the card notifies your customers, and how often.',
 
+    /**
+     * The hero/strip image.
+     *
+     * Apple prints it as `strip.png`, Google as `heroImage`. Both providers had
+     * been reading `hero_image_url` since migration 21 while nothing could set
+     * it and nothing rendered it — a column a merchant could only reach by
+     * editing the database. It now has an upload control and appears in both
+     * previews.
+     */
+    hero: 'Banner image',
+    heroUpload: 'Upload a banner',
+    heroReplace: 'Replace banner',
+    heroHint:
+      'A wide PNG, JPG or WebP, up to {max} KB. Sits under your name on the card — a photo of the shop or a product works well.',
+
     templates: {
       title: 'Start from a template',
       subtitle: 'Pick one, then change anything you like.',
@@ -1333,16 +1348,20 @@ export const en = {
     description: 'Short description',
     descriptionPlaceholder: 'Speciality coffee and pastries, since 2019.',
     logo: 'Logo',
-    logoHint: 'A square PNG, JPG or WebP. Shown on your loyalty card.',
+    logoHint: 'A square PNG, JPG or WebP, up to {max} KB. Shown on your loyalty card.',
     logoUpload: 'Upload a logo',
     logoReplace: 'Replace logo',
     logoUploading: 'Uploading…',
     logoUrlFallback: 'Paste a link to your logo. File uploads are off on this deployment.',
     logoErrors: {
       empty: 'That file is empty.',
-      tooLarge: 'That file is too large. The limit is {max} MB.',
+      /*
+       * Stated in KB, not MB. The ceiling is what a wallet pass will actually
+       * embed (512 KB), and "0.5 MB" is a worse way to say the same number.
+       */
+      tooLarge: 'That file is too large. The limit is {max} KB.',
       unsupportedFormat: 'Use a PNG, JPG or WebP image.',
-      uploadFailed: 'We could not upload that logo. Please try again.',
+      uploadFailed: 'We could not upload that image. Please try again.',
     },
     icon: 'Icon',
     cover: 'Cover image',

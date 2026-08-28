@@ -58,6 +58,25 @@ export function CardDesignPanel({
     return result.logoUrl
   }
 
+  /**
+   * Uploads the card's banner.
+   *
+   * The route writes it straight onto the design row, so the URL comes back
+   * already persisted. It is still returned to the field, which puts it into the
+   * designer's draft — otherwise the preview would not move until the next
+   * revalidation and the merchant would think the upload failed.
+   */
+  async function uploadHero(file: File): Promise<string> {
+    const form = new FormData()
+    form.append('file', file)
+    const result = await apiFetch<{ url: string }>(
+      `/api/v1/brand/logo${query({ businessId, kind: 'hero' })}`,
+      { method: 'POST', body: form }
+    )
+    await mutate()
+    return result.url
+  }
+
   async function setLogo(logoUrl: string | null) {
     try {
       await apiPatch('/api/v1/brand', { businessId, logoUrl })
@@ -127,6 +146,7 @@ export function CardDesignPanel({
               uploadsEnabled={uploadsEnabled}
               onUploadLogo={canWrite ? uploadLogo : undefined}
               onLogoChange={canWrite ? (value) => void setLogo(value) : undefined}
+              onUploadHero={canWrite && uploadsEnabled ? uploadHero : undefined}
               onSave={(design) => void save(design)}
             />
           </div>

@@ -102,6 +102,16 @@ export type ResolvedCardDesign = Omit<
   backgroundColor: string
   foregroundColor: string
   accentColor: string
+  /**
+   * The brand's second colour, when it has one.
+   *
+   * Null for most businesses. It is the far stop of a `gradient` card, which is
+   * the only thing it drives — and the reason it now drives anything at all: the
+   * Brand panel offered it beside three colours that all rendered, so a merchant
+   * could set it, save it, and watch nothing happen. A field that does nothing is
+   * worse than an absent one, because it makes the rest of the screen suspect.
+   */
+  secondaryColor: string | null
   logoUrl: string | null
   /** Resolved from `progressStyle: 'auto'` against the program. */
   effectiveProgress: Exclude<ProgressStyle, 'auto'>
@@ -197,10 +207,26 @@ export function cardBackground(design: {
   cardStyle: CardStyle
   backgroundColor: string
   accentColor: string
+  /** The brand's second colour. Only `gradient` uses it. */
+  secondaryColor?: string | null
 }): string {
   const { cardStyle, backgroundColor, accentColor } = design
+  const secondary = normalizeHex(design.secondaryColor)
   switch (cardStyle) {
     case 'gradient':
+      /*
+       * A brand with a second colour gets a gradient between its two colours,
+       * which is what a merchant means by picking one. Without it the gradient is
+       * derived from the single background via `shift`, which is a good default
+       * and was previously the only behaviour.
+       *
+       * `duotone` deliberately keeps using the *accent* as its second tone: it is
+       * a hard split rather than a blend, and the accent is the colour chosen to
+       * stand against the background.
+       */
+      if (secondary) {
+        return `linear-gradient(145deg, ${backgroundColor} 0%, ${secondary} 100%)`
+      }
       return `linear-gradient(145deg, ${shift(backgroundColor, 0.12)} 0%, ${backgroundColor} 55%, ${shift(backgroundColor, -0.25)} 100%)`
     case 'duotone':
       return `linear-gradient(135deg, ${backgroundColor} 0%, ${backgroundColor} 58%, ${accentColor} 58%, ${accentColor} 100%)`
@@ -268,7 +294,10 @@ export function effectiveProgressStyle(
  */
 export function resolveCardDesign(
   design: CardDesign,
-  brand: Pick<BrandKit, 'primaryColor' | 'accentColor' | 'textColor' | 'logoUrl'>,
+  brand: Pick<BrandKit, 'primaryColor' | 'accentColor' | 'textColor' | 'logoUrl'> & {
+    /** Optional so a caller holding a partial brand still type-checks. */
+    secondaryColor?: string | null
+  },
   program: ProgramShape = { goal: null, isStampProgram: false }
 ): ResolvedCardDesign {
   const backgroundColor =
@@ -276,6 +305,16 @@ export function resolveCardDesign(
 
   const accentColor =
     normalizeHex(design.accentColor) ?? normalizeHex(brand.accentColor) ?? shift(backgroundColor, 0.4)
+
+  /*
+   * The second brand colour only applies when the merchant has explicitly
+   * overridden the card's background. If they have, the gradient runs between
+   * *their* background and their secondary — but if the card's background came
+   * from a template while the brand's secondary came from the Brand panel, the
+   * two were never chosen together and blending them is a guess. Honoured only
+   * on `gradient`, which is the only style that reads it.
+   */
+  const secondaryColor = design.cardStyle === 'gradient' ? normalizeHex(brand.secondaryColor) : null
 
   const chosenForeground =
     normalizeHex(design.foregroundColor) ?? normalizeHex(brand.textColor)
@@ -285,17 +324,32 @@ export function resolveCardDesign(
    * change their background far more often than their text colour, so the pair
    * that was legible in March stops being legible in April without anyone
    * touching the text setting — and the result ships to every customer's phone.
+   *
+   * With a gradient the text crosses two colours, so it has to clear AA against
+   * *both* stops. Checking only the background is how a card ends up readable at
+   * the top and invisible at the bottom.
    */
-  const foregroundColor =
-    chosenForeground && meetsContrastAA(chosenForeground, backgroundColor)
-      ? chosenForeground
-      : readableTextOn(backgroundColor)
+  const stops = secondaryColor ? [backgroundColor, secondaryColor] : [backgroundColor]
+  const legibleOnEveryStop = (candidate: string) =>
+    stops.every((stop) => meetsContrastAA(candidate, stop))
+
+  const foregroundColor = chosenForeground && legibleOnEveryStop(chosenForeground)
+    ? chosenForeground
+    : legibleOnEveryStop('#ffffff')
+      ? '#ffffff'
+      : legibleOnEveryStop('#000000')
+        ? '#000000'
+        : // Neither pure colour clears both stops — the two brand colours are too
+          // close in luminance to sit under one text colour. The background is
+          // what carries the balance, so its own best answer wins.
+          readableTextOn(backgroundColor)
 
   return {
     ...design,
     backgroundColor,
     foregroundColor,
     accentColor,
+    secondaryColor,
     logoUrl: design.logoUrl ?? brand.logoUrl ?? null,
     effectiveProgress: effectiveProgressStyle(design.progressStyle, program),
   }

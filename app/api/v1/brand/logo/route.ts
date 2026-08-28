@@ -1,17 +1,32 @@
 import { createHash } from 'node:crypto'
+import { z } from 'zod'
 import { defineRoute } from '@/lib/api/handler'
 import { businessIdSchema } from '@/lib/api/schemas'
 import { badRequest, payloadTooLarge, unprocessable } from '@/lib/errors'
 import { checkLogo, MAX_LOGO_BYTES } from '@/lib/brand/logo'
 import { storage, storageKeys } from '@/lib/storage'
 import { updateBrandKit } from '@/lib/brand/store'
+import { updateCardDesign } from '@/lib/wallet/card-design-store'
 import { scheduleBusinessWalletSync } from '@/lib/wallet/sync'
 import { recordAudit } from '@/lib/audit'
 
 export const runtime = 'nodejs'
 
 /**
- * Logo upload.
+ * Brand image upload — the logo, and the card's hero/strip image.
+ *
+ * One route for both because the interesting work is identical (sniff the bytes,
+ * fingerprint them, store them public, invalidate installed passes) and only the
+ * destination differs. `kind` selects it:
+ *
+ *   * `logo` → `businesses.logo_url`, via the Brand Kit. Appears on the card, the
+ *     join page, the gift shop and every email.
+ *   * `hero` → `wallet_card_designs.hero_image_url`, via the card design. Apple
+ *     renders it as `strip.png`, Google as `heroImage`.
+ *
+ * The hero image was previously **unreachable**: the column existed, both
+ * providers consumed it, and nothing could set it. A merchant had to write the
+ * row by hand, which is not a feature.
  *
  * The product rule this exists to satisfy is blunt: *a merchant must be able to
  * put their own logo on their customers' loyalty card without a developer.*
@@ -39,16 +54,22 @@ export const runtime = 'nodejs'
  * Written with `raw: false` but no `body` schema: the wrapper only reads the body
  * when a schema asks it to, so `request.formData()` here still sees the stream.
  */
+const uploadQuerySchema = businessIdSchema.extend({
+  /** Which image this is. Defaults to `logo` so existing callers are unaffected. */
+  kind: z.enum(['logo', 'hero']).optional(),
+})
+
 export const POST = defineRoute(
   {
     name: 'brand.logo.upload',
     auth: 'required',
-    query: businessIdSchema,
+    query: uploadQuerySchema,
     businessIdFrom: { source: 'query', key: 'businessId' },
     permissions: ['settings:write'],
     rateLimit: 'upload',
   },
-  async ({ request, business, actor }) => {
+  async ({ request, query, business, actor }) => {
+    const kind = query.kind ?? 'logo'
     const driver = storage()
     if (!driver.isConfigured()) {
       throw unprocessable('File storage is not configured on this deployment')
@@ -78,11 +99,14 @@ export const POST = defineRoute(
     if (!check.ok) {
       // The reason travels as a code so the dashboard can say it in the
       // merchant's language rather than echoing an English sentence from an API.
-      throw unprocessable(`Logo rejected: ${check.reason}`, { reason: check.reason })
+      throw unprocessable(`Image rejected: ${check.reason}`, { reason: check.reason })
     }
 
     const fingerprint = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
-    const key = storageKeys.businessLogo(business.businessId, fingerprint, check.format.extension)
+    const key =
+      kind === 'hero'
+        ? storageKeys.businessHero(business.businessId, fingerprint, check.format.extension)
+        : storageKeys.businessLogo(business.businessId, fingerprint, check.format.extension)
 
     await driver.put({
       key,
@@ -93,16 +117,26 @@ export const POST = defineRoute(
       public: true,
     })
 
-    const logoUrl = driver.publicUrl(key)
-    const brand = await updateBrandKit(business.businessId, { logoUrl })
+    const url = driver.publicUrl(key)
+
+    /*
+     * The logo is identity and lives on the Brand Kit; the hero image is card
+     * styling and lives on the design. Writing each to its own owner is what
+     * keeps `lib/brand/kit.ts` the single answer to "who is this business" —
+     * putting the strip image there because the upload happened to share a route
+     * would be the same conflation migration 21 removed.
+     */
+    const brand = kind === 'logo' ? await updateBrandKit(business.businessId, { logoUrl: url }) : null
+    const design =
+      kind === 'hero' ? await updateCardDesign(business.businessId, { heroImageUrl: url }) : null
 
     await recordAudit({
       businessId: business.businessId,
       actor,
-      action: 'brand.logo_uploaded',
+      action: kind === 'hero' ? 'brand.hero_uploaded' : 'brand.logo_uploaded',
       resourceType: 'business',
       resourceId: business.businessId,
-      summary: `Uploaded logo (${check.format.mime}, ${bytes.byteLength} bytes)`,
+      summary: `Uploaded ${kind} (${check.format.mime}, ${bytes.byteLength} bytes)`,
       request,
     })
 
@@ -110,6 +144,7 @@ export const POST = defineRoute(
     // and sees the old one on their own phone concludes the product is broken.
     await scheduleBusinessWalletSync(business.businessId, 'settings_changed')
 
-    return { logoUrl, brand }
+    // `logoUrl` is kept in the response for the existing Brand panel caller.
+    return { url, logoUrl: kind === 'logo' ? url : null, kind, brand, design }
   }
 )

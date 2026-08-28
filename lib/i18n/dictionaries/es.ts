@@ -1204,6 +1204,21 @@ export const es: Dictionary = {
     designHint: 'Colores, logo y disposición. Los cambios se ven al momento.',
     behaviourHint: 'Cuándo avisa la tarjeta a tus clientes, y con qué frecuencia.',
 
+    /**
+     * La imagen de banner.
+     *
+     * Apple la imprime como `strip.png` y Google como `heroImage`. Los dos
+     * proveedores leían `hero_image_url` desde la migración 21 mientras nada
+     * podía asignarla y nada la mostraba: una columna a la que el comerciante
+     * solo llegaba editando la base de datos. Ya tiene control de subida y sale
+     * en las dos previsualizaciones.
+     */
+    hero: 'Imagen de banner',
+    heroUpload: 'Subir un banner',
+    heroReplace: 'Cambiar el banner',
+    heroHint:
+      'Un PNG, JPG o WebP panorámico, de hasta {max} KB. Va debajo de tu nombre en la tarjeta: una foto del local o de un producto funciona bien.',
+
     templates: {
       title: 'Empieza con una plantilla',
       subtitle: 'Elige una y cambia lo que quieras.',
@@ -1322,16 +1337,20 @@ export const es: Dictionary = {
     description: 'Descripción breve',
     descriptionPlaceholder: 'Café de especialidad y bollería, desde 2019.',
     logo: 'Logo',
-    logoHint: 'Un PNG, JPG o WebP cuadrado. Sale en tu tarjeta de fidelidad.',
+    logoHint: 'Un PNG, JPG o WebP cuadrado, de hasta {max} KB. Sale en tu tarjeta de fidelidad.',
     logoUpload: 'Subir un logo',
     logoReplace: 'Cambiar el logo',
     logoUploading: 'Subiendo…',
     logoUrlFallback: 'Pega un enlace a tu logo. En esta instalación no se pueden subir archivos.',
     logoErrors: {
       empty: 'Ese archivo está vacío.',
-      tooLarge: 'Ese archivo pesa demasiado. El límite son {max} MB.',
+      /*
+       * En KB, no en MB. El techo es lo que un pase de wallet llega a incrustar
+       * de verdad (512 KB), y «0,5 MB» es una forma peor de decir lo mismo.
+       */
+      tooLarge: 'Ese archivo pesa demasiado. El límite son {max} KB.',
       unsupportedFormat: 'Usa una imagen PNG, JPG o WebP.',
-      uploadFailed: 'No hemos podido subir ese logo. Inténtalo otra vez.',
+      uploadFailed: 'No hemos podido subir esa imagen. Inténtalo otra vez.',
     },
     icon: 'Icono',
     cover: 'Imagen de portada',

@@ -3,6 +3,7 @@ import { PKPass } from 'passkit-generator'
 import { env } from '@/lib/env'
 import { notConfigured } from '@/lib/errors'
 import { fillLabel, formatPassDate } from '@/lib/wallet/pass-format'
+import { MAX_PASS_IMAGE_BYTES } from '@/lib/brand/logo'
 import type { WalletPassContent, WalletSettings } from '@/lib/wallet/types'
 
 /**
@@ -53,8 +54,13 @@ async function fetchImage(url: string | null | undefined): Promise<Buffer | null
     clearTimeout(timer)
     if (!response.ok) return null
     const buffer = Buffer.from(await response.arrayBuffer())
-    // Guard against a merchant pointing at a 20 MB image.
-    return buffer.byteLength <= 512_000 ? buffer : null
+    /*
+     * Guard against a merchant pointing at a 20 MB image. The limit is shared
+     * with the upload route rather than written here — it used to be a bare
+     * `512_000` while uploads allowed 2 MB, so an image between the two was
+     * accepted everywhere and silently dropped from the pass.
+     */
+    return buffer.byteLength <= MAX_PASS_IMAGE_BYTES ? buffer : null
   } catch {
     return null
   }

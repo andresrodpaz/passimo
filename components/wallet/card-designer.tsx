@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import { CardPreview, type CardPreviewData } from '@/components/wallet/card-preview'
 import { PlatformSwitch } from '@/components/wallet/platform-switch'
-import { LogoField } from '@/components/brand/logo-field'
+import { HERO_COPY, LogoField } from '@/components/brand/logo-field'
 import {
   CARD_STYLES,
   PROGRESS_STYLES,
@@ -82,6 +82,14 @@ export type CardDesignerProps = {
   onUploadLogo?: (file: File) => Promise<string>
   /** Stores the chosen logo on the brand kit, or clears it when null. */
   onLogoChange?: (logoUrl: string | null) => void
+  /**
+   * Uploads the card's banner and resolves to its URL.
+   *
+   * Separate from the logo because the destination differs — the banner is a
+   * design field, the logo is brand identity — and because a caller may support
+   * one without the other (onboarding uploads no banner).
+   */
+  onUploadHero?: (file: File) => Promise<string>
   uploadsEnabled?: boolean
   onSave: (design: CardDesign) => void
   className?: string
@@ -96,6 +104,7 @@ export function CardDesigner({
   readOnly = false,
   onUploadLogo,
   onLogoChange,
+  onUploadHero,
   uploadsEnabled = false,
   onSave,
   className,
@@ -215,6 +224,26 @@ export function CardDesigner({
               onChange={onLogoChange}
             />
             <p className="mt-2 text-xs text-muted-foreground">{t('cardDesign.logo.sharedHint')}</p>
+          </Section>
+        )}
+
+        {/*
+          The banner sits on the *design*, not the brand kit — it is card styling
+          rather than business identity, so it changes per card and not per
+          business. Both providers have consumed it since migration 21; until now
+          nothing could set it.
+        */}
+        {onUploadHero && (
+          <Section title={t('cardDesign.hero')}>
+            <LogoField
+              value={draft.heroImageUrl}
+              uploadsEnabled={uploadsEnabled}
+              disabled={readOnly}
+              previewBackground={resolved.backgroundColor}
+              onUpload={onUploadHero}
+              onChange={(value) => set('heroImageUrl', value)}
+              copy={HERO_COPY}
+            />
           </Section>
         )}
 

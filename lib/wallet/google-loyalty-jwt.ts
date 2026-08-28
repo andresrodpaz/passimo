@@ -1,6 +1,8 @@
 import 'server-only'
 import { env } from '@/lib/env'
 import { createGoogleWalletSaveJwt } from '@/lib/wallet/google-save-jwt'
+import { DEFAULT_BRAND } from '@/lib/brand/kit'
+import { normalizeHex } from '@/lib/wallet/card-design'
 import type { WalletPassContent, WalletSettings } from '@/lib/wallet/types'
 
 /**
@@ -124,9 +126,14 @@ export function buildGoogleLoyaltyObject(
 
 export function buildGoogleLoyaltyClass(content: WalletPassContent): Record<string, unknown> {
   const issuerId = env.google.issuerId ?? 'issuer'
-  const hexBackground = /^#[0-9a-fA-F]{6}$/.test(content.branding.backgroundColor)
-    ? content.branding.backgroundColor
-    : '#111827'
+  /*
+   * Google rejects a class whose `hexBackgroundColor` is not a six-digit hex, so
+   * this is a last guard rather than a colour decision — `resolveCardDesign` has
+   * already normalised the value. The fallback is the platform brand default
+   * rather than a second literal, so there is one place to change it.
+   */
+  const hexBackground =
+    normalizeHex(content.branding.backgroundColor) ?? DEFAULT_BRAND.primaryColor
 
   return {
     id: googleClassId(content.businessId, issuerId),

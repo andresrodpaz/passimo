@@ -78,6 +78,14 @@ export const storageKeys = {
    */
   businessLogo: (businessId: string, fingerprint: string, extension: string) =>
     `businesses/${businessId}/logo-${fingerprint}.${extension}`,
+  /**
+   * The card's hero/strip image — Apple's `strip.png`, Google's `heroImage`.
+   *
+   * Content-fingerprinted for exactly the reason the logo is: it is embedded in
+   * installed passes behind caches we do not control.
+   */
+  businessHero: (businessId: string, fingerprint: string, extension: string) =>
+    `businesses/${businessId}/hero-${fingerprint}.${extension}`,
   campaignImage: (businessId: string, campaignId: string, extension: string) =>
     `businesses/${businessId}/campaigns/${campaignId}.${extension}`,
   walletAsset: (businessId: string, name: string) =>

@@ -11,6 +11,7 @@ import { fillLabel, formatPassDate, formatPassMonthYear, passLocaleTag } from '@
 import { createTranslator } from '@/lib/i18n/translate'
 import { DEFAULT_CARD_DESIGN, resolveCardDesign } from '@/lib/wallet/card-design'
 import { placeholderBrandKit } from '@/lib/brand/kit'
+import { MAX_LOGO_BYTES, MAX_PASS_IMAGE_BYTES } from '@/lib/brand/logo'
 import type { Locale } from '@/lib/i18n/locales'
 import type { WalletPassContent } from '@/lib/wallet/types'
 
@@ -183,6 +184,27 @@ function strings(node: unknown): string[] {
   if (node && typeof node === 'object') return Object.values(node).flatMap(strings)
   return []
 }
+
+describe('brand image size limits', () => {
+  it('refuses at upload exactly what the pass builder would refuse to embed', () => {
+    /*
+     * These were two independent numbers: uploads allowed 2 MB while
+     * `fetchImage` in `apple-pass.ts` silently dropped anything over 512 KB. A
+     * merchant could therefore upload a 1.5 MB logo, see it accepted, see it on
+     * the Brand screen and on their join page — and have it absent from every
+     * wallet pass, which is the surface they uploaded it for.
+     *
+     * Silent, because a missing image is not an error: the pass builds fine
+     * without one. Nothing would ever have reported it.
+     */
+    expect(MAX_LOGO_BYTES).toBe(MAX_PASS_IMAGE_BYTES)
+  })
+
+  it('keeps the ceiling generous enough for a real logo', () => {
+    // A 512×512 PNG logo is typically well under 100 KB.
+    expect(MAX_PASS_IMAGE_BYTES).toBeGreaterThanOrEqual(256 * 1024)
+  })
+})
 
 describe('pass-format', () => {
   it('pins a region, not just a language', () => {

@@ -243,9 +243,10 @@ accessibility label wrong on every Android phone that installed the card.
 | Issuing a real Apple `.pkpass` | **Credential-dependent.** The builder and its `pass.json` structure are complete and unit-tested; no Apple certificates exist on this deployment. `appleWalletConfigured()` reports false and the UI says so. |
 | Issuing a real Google pass | **Credential-dependent.** Class and object builders are complete and unit-tested; no issuer account exists. |
 | Logo upload | Implemented via `lib/brand/logo.ts` and `lib/storage/*` (`local` and `s3` drivers). The `s3` driver is untested against a real bucket. |
-| Hero/strip image | **Partial.** `heroImageUrl` is stored, resolved, and consumed by both providers — Apple as `strip.png`, Google as `heroImage`. But there is no upload control in the designer *and no component renders it*, so a merchant can neither set it nor preview it. It is reachable only by writing the column directly. |
-| `secondaryColor` | Editable in the Brand panel, stored, and read by `mapBrandKit` — but no surface renders it yet. |
-| Per-location card variants | **Not implemented.** One design per business. |
+| Hero/strip image | **Implemented.** Upload control in the designer, rendered in both previews, consumed by both providers (Apple `strip.png`, Google `heroImage`). See §11. |
+| `secondaryColor` | **Implemented.** Drives the far stop of a `gradient` card. See §12. |
+| Per-location card variants | **Not implemented.** One design per business — the primary key on `wallet_card_designs` is `business_id`. |
+| Cover image (`coverUrl`) | **Stored and editable, renders nowhere.** The one remaining half-wired brand field. |
 
 ---
 
@@ -258,11 +259,97 @@ accessibility label wrong on every Android phone that installed the card.
 | `tests/unit/email-shell.test.ts` | The email shell agreeing with the card on text colour, `lang`, translated footer, HTML escaping |
 | `tests/unit/landing-demo.test.ts` | The demo state machine, and that all 24 trade/palette combinations resolve to a legible card |
 
+Two assertions are structural rather than behavioural, and both exist because the
+bug they guard is a *duplicate* — something no test of any single function can
+see:
+
+- **Luminance is implemented once.** `wallet-card-design.test.ts` reads the source
+  tree and asserts the WCAG coefficients appear in `card-design.ts` and nowhere
+  else. Three copies once existed simultaneously — there, in the email shell, and
+  in `components/loyalty-card.tsx` — each claiming WCAG in a comment while
+  computing an ungamma'd channel average. They disagreed, so one brand colour
+  produced white text on the installed pass and dark text on the join page
+  advertising it.
+- **The upload ceiling equals the embed ceiling.** `wallet-pass-build.test.ts`
+  asserts `MAX_LOGO_BYTES === MAX_PASS_IMAGE_BYTES`. See §10.
+
 Run: `pnpm test`.
 
 ---
 
-## 10. Related
+## 10. The hero/banner image
+
+**Status: implemented.**
+
+Apple prints it as `strip.png`, Google as `heroImage`. Both providers had been
+consuming `wallet_card_designs.hero_image_url` since migration `000021` while
+**nothing could set it and nothing rendered it** — a column a merchant could only
+reach by editing the database.
+
+| Piece | Where |
+| --- | --- |
+| Upload | `POST /api/v1/brand/logo?kind=hero` |
+| Storage key | `storageKeys.businessHero` — content-fingerprinted, tenant-scoped |
+| Control | `LogoField` with `HERO_COPY` (wide thumbnail, `object-cover`) |
+| Preview | `HeroStrip` in `card-preview.tsx`, in both platform framings |
+
+One route serves both images because the work is identical — sniff the bytes,
+fingerprint, store public, invalidate installed passes — and only the destination
+differs. That also means the hero upload inherits the logo route's auth,
+`settings:write` permission, `upload` rate limit and tenant scoping rather than
+re-deriving them.
+
+The destinations differ deliberately: the **logo** is identity and is written to
+the Brand Kit; the **hero** is card styling and is written to the card design.
+Putting the strip image on the brand because the upload shares a route would
+recreate the conflation migration `000021` removed.
+
+### The size ceiling, and the bug it closed
+
+`MAX_LOGO_BYTES` was 2 MB while `fetchImage` in `apple-pass.ts` refused anything
+over a bare `512_000`. A merchant could upload a 1.5 MB logo, see it accepted, see
+it on the Brand screen and on their join page — and have it **silently absent from
+every wallet pass**, which is the surface they uploaded it for. Silent, because a
+dropped image is not an error: the pass builds fine without one, so nothing would
+ever have reported it.
+
+`MAX_PASS_IMAGE_BYTES` (512 KB) is now the single ceiling, shared by the upload
+route, the client-side pre-check and the pass builder. The refusal happens at the
+file picker, in the merchant's language, instead of never. Pinned by a test.
+
+---
+
+## 11. The brand's second colour
+
+**Status: implemented.**
+
+`secondaryColor` was offered in the Brand panel beside three colours that all
+rendered. A merchant could set it, save it, and watch nothing happen — which is
+worse than not offering it, because it makes the rest of the screen suspect.
+
+It now drives the far stop of a `gradient` card:
+
+```
+gradient + brand secondary  →  linear-gradient(145deg, background 0%, secondary 100%)
+gradient, no secondary      →  the derived three-stop gradient (previous behaviour)
+```
+
+Two deliberate limits:
+
+- **Only `gradient` reads it.** `duotone` keeps using the *accent* as its second
+  tone — it is a hard split rather than a blend, and the accent is the colour
+  chosen to stand against the background.
+- **Text must clear AA against *both* stops.** With a gradient the copy crosses
+  two colours; checking only the background is how a card ends up readable at the
+  top and invisible at the bottom. When the two brand colours are too far apart
+  in luminance for any single text colour to clear both — a near-black paired
+  with a cream — the background's own answer wins, because the background is what
+  carries the balance. That fallback is documented and tested rather than
+  arbitrary.
+
+---
+
+## 12. Related
 
 - [`WALLET_PROXIMITY.md`](WALLET_PROXIMITY.md) — geofencing, campaigns, the rule engine
 - [`INTERNATIONALIZATION.md`](INTERNATIONALIZATION.md) — how "never mix languages" is enforced

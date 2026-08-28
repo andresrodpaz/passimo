@@ -7,8 +7,32 @@
  * two enforcement points; the server one is the one that matters.
  */
 
-/** 2 MB. A logo that needs more than this is a photograph, not a logo. */
-export const MAX_LOGO_BYTES = 2 * 1024 * 1024
+/**
+ * The largest image the pass builder will actually embed.
+ *
+ * `apple-pass.ts` fetches the logo and hero image when building a `.pkpass` and
+ * refuses anything larger than this, so it is the real ceiling on a brand image
+ * whatever any other limit says.
+ *
+ * It is exported and shared because it used to be a bare `512_000` inside
+ * `fetchImage` while the upload limit was 2 MB. A merchant could therefore upload
+ * a 1.5 MB logo, see it accepted, see it on the Brand screen and on their join
+ * page — and have it **silently absent from every wallet pass**, which is the one
+ * surface they uploaded it for. Silent, because a dropped image is not an error:
+ * the pass builds fine without one.
+ *
+ * Aligning the two means the refusal happens at the file picker, in the
+ * merchant's language, instead of never.
+ */
+export const MAX_PASS_IMAGE_BYTES = 512 * 1024
+
+/**
+ * 512 KB, matching the pass ceiling above.
+ *
+ * Generous for a logo — a 512×512 PNG is typically well under 100 KB — and the
+ * alternative is accepting files that cannot reach the card.
+ */
+export const MAX_LOGO_BYTES = MAX_PASS_IMAGE_BYTES
 
 export type LogoFormat = {
   mime: string

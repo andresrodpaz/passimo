@@ -3,14 +3,28 @@
 import * as React from 'react'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { meetsContrastAA, normalizeHex, readableTextOn } from '@/lib/wallet/card-design'
 
 /**
  * The loyalty card.
  *
  * Shown on the join page, the customer's card page and the branding editor —
  * one component so the preview a merchant designs is exactly what the customer
- * sees. Text colour is derived from the background rather than trusted, so a
- * merchant can never accidentally configure an unreadable card.
+ * sees.
+ *
+ * Legibility is enforced rather than trusted, but it is enforced through the
+ * *same* functions the wallet pass builder uses. This file used to carry its own
+ * `readableOn`, which was the third copy of a formula that claimed WCAG
+ * luminance while computing an unweighted channel average with no gamma
+ * correction and thresholding at 0.6. Three copies meant three verdicts: the
+ * same brand colour could yield white text on the installed pass and dark text
+ * on the join page that advertised it.
+ *
+ * The rule is now identical to `resolveBrandPalette`'s: a supplied text colour
+ * is honoured when it actually passes AA against the background, and recomputed
+ * when it does not. That matters because callers now pass an already-resolved
+ * palette — recomputing unconditionally would discard a merchant's legible
+ * choice for one this component happened to prefer.
  */
 
 interface LoyaltyCardProps {
@@ -31,13 +45,19 @@ interface LoyaltyCardProps {
   className?: string
 }
 
-function readableOn(hex: string, fallback: string): string {
-  const value = hex?.replace('#', '') ?? ''
-  if (!/^[0-9a-fA-F]{6}$/.test(value)) return fallback
-  const r = parseInt(value.slice(0, 2), 16)
-  const g = parseInt(value.slice(2, 4), 16)
-  const b = parseInt(value.slice(4, 6), 16)
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6 ? '#111827' : '#ffffff'
+/**
+ * A text colour guaranteed readable on `background`.
+ *
+ * `preferred` is kept only when it clears AA; otherwise black or white is
+ * computed from the background. An unparseable background falls back to the
+ * preferred colour, then to white — a card must still render.
+ */
+function legibleOn(background: string, preferred?: string | null): string {
+  const bg = normalizeHex(background)
+  const chosen = normalizeHex(preferred)
+
+  if (!bg) return chosen ?? '#ffffff'
+  return chosen && meetsContrastAA(chosen, bg) ? chosen : readableTextOn(bg)
 }
 
 export function LoyaltyCard({
@@ -55,8 +75,12 @@ export function LoyaltyCard({
   memberName,
   className,
 }: LoyaltyCardProps) {
-  const foreground = readableOn(backgroundColor, textColor)
-  const onAccent = readableOn(accentColor, backgroundColor)
+  const foreground = legibleOn(backgroundColor, textColor)
+  // Nothing is "preferred" on the accent — the badge sits on the merchant's
+  // accent colour and only black or white can be guaranteed against it. The old
+  // code fell back to the card background here, which is not required to
+  // contrast with the accent at all.
+  const onAccent = legibleOn(accentColor)
 
   // A 40-slot grid is unreadable; past 12 the card switches to a counter.
   const useGrid = variant === 'stamps' && stampCount > 0 && stampCount <= 12

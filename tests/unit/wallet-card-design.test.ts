@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   CARD_DESIGN_COLUMNS,
@@ -302,6 +304,128 @@ describe('resolveCardDesign', () => {
   })
 })
 
+describe('the brand’s second colour', () => {
+  const design = (overrides: Partial<CardDesign> = {}): CardDesign => ({
+    ...DEFAULT_CARD_DESIGN,
+    ...overrides,
+  })
+
+  it('is ignored by every style except gradient', () => {
+    // Duotone has its own second tone (the accent) and a solid card has none.
+    for (const cardStyle of CARD_STYLES.filter((style) => style !== 'gradient')) {
+      const resolved = resolveCardDesign(design({ cardStyle }), {
+        ...BRAND,
+        secondaryColor: '#7f1d1d',
+      })
+      expect(resolved.secondaryColor, cardStyle).toBeNull()
+    }
+  })
+
+  it('drives the far stop of a gradient', () => {
+    const resolved = resolveCardDesign(design({ cardStyle: 'gradient' }), {
+      ...BRAND,
+      secondaryColor: '#7f1d1d',
+    })
+    expect(resolved.secondaryColor).toBe('#7f1d1d')
+    const background = cardBackground(resolved)
+    expect(background).toContain(resolved.backgroundColor)
+    expect(background).toContain('#7f1d1d')
+  })
+
+  it('falls back to the derived gradient when the brand has no second colour', () => {
+    const resolved = resolveCardDesign(design({ cardStyle: 'gradient' }), BRAND)
+    expect(resolved.secondaryColor).toBeNull()
+    expect(cardBackground(resolved)).toContain('gradient')
+  })
+
+  it('ignores an unusable stored value', () => {
+    const resolved = resolveCardDesign(design({ cardStyle: 'gradient' }), {
+      ...BRAND,
+      secondaryColor: 'not a colour',
+    })
+    expect(resolved.secondaryColor).toBeNull()
+  })
+
+  it('rejects a stored text colour that fails on the second stop alone', () => {
+    /*
+     * The failure this prevents: text checked only against `backgroundColor` —
+     * which is all every other card style needs — is readable at the top of a
+     * gradient and invisible at the bottom.
+     *
+     * White clears AA on neither white nor cream, and black clears both, so
+     * there is a right answer here and the resolver has to find it. Both stops
+     * are pale on purpose: a dark-to-pale pair has no single legible colour at
+     * all, which is the separate case below.
+     */
+    const resolved = resolveCardDesign(
+      design({ cardStyle: 'gradient', foregroundColor: '#ffffff' }),
+      { ...BRAND, primaryColor: '#ffffff', secondaryColor: '#fef3c7' }
+    )
+    expect(resolved.foregroundColor).toBe('#000000')
+  })
+
+  it('would have accepted that same colour without the second stop', () => {
+    // Proves the previous assertion is actually about the gradient rule rather
+    // than about white being rejected on a pale background anyway.
+    const solid = resolveCardDesign(
+      design({ cardStyle: 'gradient', foregroundColor: '#ffffff' }),
+      { ...BRAND, primaryColor: '#111827', secondaryColor: null }
+    )
+    expect(solid.foregroundColor).toBe('#ffffff')
+  })
+
+  it('falls back to the background’s own answer for a dark-to-pale gradient', () => {
+    /*
+     * `#111827` → `#fef3c7` spans nearly the whole luminance range, so neither
+     * black nor white clears AA on both stops. The card must still render, and
+     * the background is what carries the balance, so its answer wins. Documented
+     * rather than silently arbitrary.
+     */
+    const resolved = resolveCardDesign(
+      design({ cardStyle: 'gradient', foregroundColor: '#ffffff' }),
+      { ...BRAND, primaryColor: '#111827', secondaryColor: '#fef3c7' }
+    )
+    expect(resolved.foregroundColor).toBe(readableTextOn('#111827'))
+  })
+
+  it('never leaves a gradient stop failing AA when one colour can serve both', () => {
+    const pairs: Array<[string, string]> = [
+      ['#111827', '#1f2937'],
+      ['#ffffff', '#fef3c7'],
+      ['#0c4a6e', '#075985'],
+      ['#3f2212', '#4a1129'],
+    ]
+    for (const [primaryColor, secondaryColor] of pairs) {
+      const resolved = resolveCardDesign(design({ cardStyle: 'gradient' }), {
+        ...BRAND,
+        primaryColor,
+        secondaryColor,
+      })
+      for (const stop of [resolved.backgroundColor, resolved.secondaryColor!]) {
+        expect(
+          meetsContrastAA(resolved.foregroundColor, stop),
+          `${resolved.foregroundColor} on ${stop} (${primaryColor}→${secondaryColor})`
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('still resolves something readable when the two stops are irreconcilable', () => {
+    /*
+     * A mid-grey background against a mid-grey secondary leaves no single text
+     * colour clearing AA on both. The card must still render, and the background
+     * is what carries the balance, so its own best answer wins rather than the
+     * resolver returning nothing.
+     */
+    const resolved = resolveCardDesign(design({ cardStyle: 'gradient' }), {
+      ...BRAND,
+      primaryColor: '#767676',
+      secondaryColor: '#8a8a8a',
+    })
+    expect(resolved.foregroundColor).toMatch(/^#(?:000000|ffffff)$/)
+  })
+})
+
 describe('mapCardDesign', () => {
   it('treats a missing row as the default design', () => {
     expect(mapCardDesign(null)).toEqual(DEFAULT_CARD_DESIGN)
@@ -486,6 +610,55 @@ describe('brandKitUpdate', () => {
 
   it('is a no-op for an empty patch, because the designer autosaves', () => {
     expect(brandKitUpdate({})).toEqual({})
+  })
+})
+
+/**
+ * One implementation of luminance, enforced structurally.
+ *
+ * This is the only test here that reads the source rather than calling it, and
+ * it earns that because the bug it prevents is not a wrong answer — it is a
+ * *second* answer. Three separate copies of an ungamma'd channel average, each
+ * claiming WCAG in a comment, existed simultaneously in `card-design.ts`,
+ * `messaging/email-layout.ts` and `components/loyalty-card.tsx`. They disagreed,
+ * so one brand colour produced white text on the installed wallet pass and dark
+ * text on the join page advertising it.
+ *
+ * No unit test on any one of them could have caught that. Only the count can.
+ */
+describe('contrast is implemented exactly once', () => {
+  const ROOT = join(__dirname, '..', '..')
+  const SEARCHED = ['app', 'components', 'lib']
+  const CANONICAL = join('lib', 'wallet', 'card-design.ts')
+
+  function sourceFiles(dir: string): string[] {
+    const entries = readdirSync(join(ROOT, dir))
+    return entries.flatMap((entry) => {
+      const relative = join(dir, entry)
+      if (statSync(join(ROOT, relative)).isDirectory()) return sourceFiles(relative)
+      return /\.tsx?$/.test(entry) ? [relative] : []
+    })
+  }
+
+  const files = SEARCHED.flatMap(sourceFiles)
+
+  it('finds the luminance coefficients in one file only', () => {
+    // 0.0722 is the blue coefficient from WCAG 2.1. Anything computing it again
+    // is a second opinion on legibility.
+    const carriers = files.filter((file) => {
+      const source = readFileSync(join(ROOT, file), 'utf8')
+      return source.includes('0.0722') || source.includes('0.7152')
+    })
+
+    expect(carriers, `luminance re-implemented in: ${carriers.join(', ')}`).toEqual([CANONICAL])
+  })
+
+  it('scanned a plausible number of files, so a broken walk cannot pass silently', () => {
+    // Without this, a bad path would make the check above vacuously true.
+    expect(files.length).toBeGreaterThan(100)
+    expect(files).toContain(CANONICAL)
+    expect(files).toContain(join('components', 'loyalty-card.tsx'))
+    expect(files).toContain(join('lib', 'messaging', 'email-layout.ts'))
   })
 })
 

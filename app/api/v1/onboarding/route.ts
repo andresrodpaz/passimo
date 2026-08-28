@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineRoute } from '@/lib/api/handler'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { DEFAULT_BRAND } from '@/lib/brand/kit'
 import type { ChecklistFacts } from '@/lib/onboarding/checklist'
 
 export const runtime = 'nodejs'
@@ -135,9 +136,17 @@ export const GET = defineRoute(
   }
 )
 
-/** Matches the defaults `provision_business` writes at signup. */
-const DEFAULT_PRIMARY = '#111827'
-const DEFAULT_ACCENT = '#f59e0b'
+/*
+ * The defaults `passimo_provision_business` writes at signup.
+ *
+ * Read from the Brand Kit rather than restated, because the whole point of this
+ * comparison is "is this still the value we wrote?" — and two literals that are
+ * supposed to be equal are two literals that eventually are not. If the brand
+ * default changes, `brandingCustomised` must move with it or every existing
+ * merchant is suddenly reported as having personalised their brand.
+ */
+const DEFAULT_PRIMARY = DEFAULT_BRAND.primaryColor
+const DEFAULT_ACCENT = DEFAULT_BRAND.accentColor
 
 const patchSchema = z.object({
   businessId: z.string().uuid(),

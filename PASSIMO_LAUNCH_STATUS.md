@@ -1,16 +1,16 @@
 # Passimo — Launch Status
 
-**Date:** 2026-08-28
-**Supersedes:** the 2026-08-27 revision of this file, and `LAUNCH_AUDIT_REPORT.md` (2026-08-01, written under the Fidelio name)
+**Date:** 2026-08-28 (final recovery & completion pass)
+**Supersedes:** the earlier 2026-08-28 revision, the 2026-08-27 revision, and `LAUNCH_AUDIT_REPORT.md` (2026-08-01, written under the Fidelio name)
 
-This revision reports the state after a **resumed execution**. The previous
-session was interrupted by a machine shutdown mid-pass; this one recovered the
-tree, established what was actually finished, and continued from there.
+This is the state after the final pass of a resumed execution. The original
+session was interrupted by a machine shutdown; two subsequent passes recovered
+the tree, finished the interrupted work, and then audited it again.
 
-Every claim below was verified against the code and the running database on the
-date above. Where something was **not** verified, it says so and names what would
-verify it. Two claims in the previous revision were wrong; both are corrected
-here and the corrections are called out rather than quietly edited.
+Every figure below was produced by a command run against this tree on this date.
+Where something was **not** verified, it says so and names what would verify it.
+Three claims in earlier revisions were wrong; all three are corrected here and the
+corrections are called out rather than quietly edited.
 
 ---
 
@@ -19,31 +19,33 @@ here and the corrections are called out rather than quietly edited.
 Passimo is a multi-tenant SaaS loyalty and retention platform for physical
 businesses. The brand migration from Fidelio is complete, the infrastructure is
 provider-independent PostgreSQL with no Supabase dependency of any kind, and the
-product runs locally against a containerised database with a full demo dataset.
+schema now provably rebuilds from empty through the migration system.
 
-The honest position is unchanged in shape but firmer in substance: **this is a
-coherent, well-built product ready for a small, hand-held first cohort of paying
-merchants — and not ready for self-service public launch.** The gap is not code
-quality. The three things a merchant pays for at the edges — wallet passes,
-outbound messaging, card payments — are all credential-dependent, and none of
-those accounts exist yet. The architecture for all three is complete and tested.
+**The position: ready for a hand-held pilot cohort of paying merchants; not ready
+for self-service public launch.** The gap is not code. The three things a merchant
+pays for at the edges — wallet passes, outbound messaging, card payments — are all
+credential-dependent, and none of those accounts exist. The architecture for all
+three is complete and tested.
 
-What changed materially this session is that the wallet-customisation feature
-went from *written* to *working and verified*. It had two defects that would each
-have been discovered by the first merchant rather than by us:
+This pass found and fixed four defects that were each invisible by construction —
+they produced no error, no log line and no failing test:
 
-1. **Migration `000021` had never been applied.** The entire Brand Kit and card
-   design feature — `wallet_card_designs`, the brand columns on `businesses` —
-   was absent from the database while the code that reads it had shipped. The
-   designer would have failed at runtime on first use. It is applied now, and the
-   schema is verified present.
-2. **The customer-facing wallet card was entirely in English.** Every label in
-   `apple-pass.ts` and `google-loyalty-jwt.ts` was a hardcoded literal, so a
-   Spanish café's customers carried a card reading `MEMBER` / `SINCE` / `TO GO`
-   with `en-GB` dates. This is the most permanent surface the product has and the
-   only one a merchant cannot correct from the dashboard.
-
-The feature also had **no tests at all**. It has 141 now.
+1. **Migration `000021` had never been applied** (found in the previous pass, and
+   now proven reproducible: an empty schema replays all 22 migrations cleanly).
+2. **A third copy of the contrast formula** lived in `components/loyalty-card.tsx`
+   — the component rendered on the join page, the customer card page *and* the
+   branding editor. Three copies, each claiming WCAG in a comment while computing
+   an ungamma'd channel average, meant one brand colour produced white text on the
+   installed pass and dark text on the join page advertising it.
+3. **The upload limit was four times the embed limit.** `MAX_LOGO_BYTES` was 2 MB
+   while `apple-pass.ts` silently discarded anything over 512 KB. A merchant could
+   upload a 1.5 MB logo, see it accepted, see it on their Brand screen and their
+   join page — and have it absent from every wallet pass, which is the one surface
+   they uploaded it for. Silent, because a dropped image is not an error.
+4. **Two brand fields did nothing.** `heroImageUrl` was consumed by both wallet
+   providers but had no upload control and no renderer. `secondaryColor` was
+   offered in the Brand panel beside three colours that all rendered. Both are now
+   implemented rather than documented as gaps.
 
 ### Verified this session
 
@@ -51,183 +53,183 @@ The feature also had **no tests at all**. It has 141 now.
 | --- | --- |
 | `pnpm typecheck` | **Pass**, clean |
 | `pnpm lint` | **Pass**, 0 errors, 0 warnings |
-| `pnpm test` (unit) | **634 passed**, 26 files |
+| `pnpm test` (unit) | **647 passed**, 26 files |
 | `pnpm test:integration` (real PostgreSQL 16) | **71 passed**, 4 files |
-| `pnpm db:migrate` | 22/22 applied (`000021` was pending; now applied) |
-| Schema spot-check via `psql` | `wallet_card_designs` present with all 22 columns and both check constraints; 11 brand columns present on `businesses` |
+| `pnpm db:reset` — drop schema, replay from empty | **22/22 migrations applied cleanly** |
+| Fresh-schema spot check via `psql` | `wallet_card_designs`: 22 columns, 16 check constraints, PK on `business_id`. 11 brand columns on `businesses`. 22 rows in `schema_migrations`. |
+| `pnpm seed:demo` on the rebuilt database | 4 merchants (140–1,240 customers each) + platform admin |
+| Integration suite re-run against the rebuilt database | **71 passed** |
 | Supabase dependency | **Zero** — nothing in `package.json`, nothing in first-party source |
 | localhost development | Preserved. `env.appUrl` falls back to `http://localhost:3000` |
 
 ### Not verified this session
 
-| Check | Why |
+| Check | Why it matters |
 | --- | --- |
-| `pnpm build` (production) | Not run — the build was declined during this session |
+| `pnpm build` (production) | Not run — declined during this session. **The single largest unknown in this document.** |
 | `pnpm test:e2e` (Playwright, desktop + mobile) | Depends on a production build, so it could not run either |
-| Lighthouse / axe audit | No tooling run; the accessibility and performance sections below are inspection-based and say so |
+| Lighthouse / axe audit | No tooling run. The accessibility and performance sections are inspection-based and say so. |
 
-**This matters for the readiness score.** The previous revision reported a
-passing production build; that result is from 2026-08-27 and predates every
-change in this session. Treat the build as unverified until it is re-run.
+**Correction to an earlier revision:** the 2026-08-27 status reported a passing
+production build. That result predates every change in the last two passes and
+should not be read as current.
 
 ---
 
-# Recovery summary
+# Brand migration status
 
-The repository is **not** under version control (`git status` → not a repo), so
-recovery was reconstructed from file modification times, then confirmed by
-reading the code.
+**Complete. 100%.**
 
-**Where the previous session stopped:** the last write was
-`lib/i18n/dictionaries/es.ts` at 12:21, immediately after a typecheck at 12:20.
-The tree was left type-clean and green (493 tests passing), so the interruption
-did not corrupt anything — it simply stopped partway through the localisation
-pass.
+A repository-wide search for `Fidelio`/`fidelio`/`FIDELIO` outside
+`node_modules`, `.next` and build artifacts returns matches in exactly five
+categories, every one of them deliberate and commented:
 
-**How far it had got.** Classified by inspection:
-
-| Area | State on recovery |
+| Where | Why it stays |
 | --- | --- |
-| Wallet card designer, previews, platform switch | **Complete** and wired end-to-end (designer → store → `pass-content` → both providers) |
-| Brand Kit model, store, panel, logo upload | **Complete** for the wallet path |
-| Brand Kit reuse on customer pages / email | **Partial** — each surface inlined its own colour fallbacks and skipped the contrast rule |
-| Onboarding wizard, presets, persistence, resume | **Complete**, server-side, well tested |
-| Landing page, interactive demo | **Complete**, camera-free, no fake metrics — but untested |
-| QR scanner separation | **Complete** — real scanner at `/pos` and in the dashboard shell; landing demo requests no camera |
-| Localisation of wallet card, email, pushes, gift shop | **Missing** — this is where the session was cut off |
-| Migration `000021` | **Written but never applied** |
-| Tests for card design / Brand Kit / pass building | **Missing entirely** |
-| `emails/*.tsx` (6 React Email templates) | **Dead** — nothing imported them; superseded by `lib/messaging/email-layout.ts` |
+| `db/migrations/000001`–`000017` | An applied ledger. The runner verifies a SHA-256 per file and refuses to run when one changes — editing them, even in a comment, breaks `db:migrate` on every deployed database. Migration `000017` renames every `fidelio_*` routine to `passimo_*` and asserts zero remain. |
+| `lib/scan/payload.ts` | `fidelio:` / `fid:` QR schemes still parse. A printed card in a customer's wallet is not reissued because a company changed its name. `passimo:` / `psm:` are what is generated. |
+| `lib/webhooks/deliver.ts` | `X-Fidelio-*` headers sent alongside `X-Passimo-*` for integrators built against the old contract. |
+| `app/api/v1/integrations/[provider]/webhook/route.ts` | `x-fidelio-secret` still accepted. The header name is configured in somebody else's system — a Zapier action, a till — and a rename we ship cannot reach into their configuration. Both carry the same secret, so this widens no trust boundary. |
+| `lib/customers/placeholder-email.ts` | Recognises the legacy `fidelio.invalid` domain so pre-rename rows are still classified as placeholders. |
 
-The smoking gun for the cut-off point was in `lib/jobs/commerce-handlers.ts`: the
-gift-card query already selected `locale`, and nothing used it. The previous
-session had begun that file and stopped.
+Everything user-facing says Passimo: app name, metadata, Open Graph, titles,
+emails, auth, onboarding, dashboard, wallet, QR pages, error and empty states,
+README, `.env.example`, seed data, package name. Demo accounts are `@demo.com` /
+`admin@passimo.demo`.
 
-**Nothing working was rewritten.** The wallet designer, the onboarding flow, the
-landing demo and the scanner separation were all good and were left alone. Every
-change below was a gap, a defect, or a duplication.
+`passimo.app` appears in first-party source in **five places, all of them
+comments explaining why it is not hardcoded**, plus one RFC-required VAPID contact
+URI fallback. Development stays on localhost; the production domain arrives
+through `NEXT_PUBLIC_APP_URL`.
 
 ---
 
 # Wallet customization status
 
-**Complete. 95%.**
+**Complete. 98%.**
 
-A merchant can customise, without code: template, card style (solid / gradient /
+Without code, a merchant can set: template, card style (solid / gradient /
 duotone / frosted), progress rendering (auto / bar / stamps / points / none),
-typography, background, foreground and accent colours, logo, the six visibility
-toggles (member name, member since, tier, location, reward, progress), headline,
-custom message and terms text.
+typography, background, foreground and accent colours, logo, **banner image**, the
+six visibility toggles, headline, custom message and terms text.
 
 The preview updates immediately and **is not a mock** — it renders through
-`resolveCardDesign`, the same function the pass builder calls. It presents both an
-Apple Wallet-style and a Google Wallet-style layout with a QR representation,
-customer information, balance, rewards and branding, and it is labelled as a
-preview. It does not claim to be a real provider pass, which matters because
-without credentials no real pass can be issued at all.
+`resolveCardDesign`, the function the pass builder calls. It shows an Apple
+Wallet-style and a Google Wallet-style layout with a QR representation, customer
+information, balance, rewards and branding. It is labelled a preview and does not
+claim to be a real provider pass, which matters because without credentials no
+real pass can be issued at all.
 
-**Fixed this session:**
+**Completed this pass:**
 
-- The whole card face is now localised. `buildPassLabels` resolves every fixed
-  string once, in the *business's* language, onto `WalletPassContent.labels`;
-  both providers render from it. Dates go through one shared
-  `pass-format.ts` rather than three `toLocaleDateString('en-GB')` calls.
-- Google's `language` tags on `localizedIssuerName` and image
-  `contentDescription` now carry the business locale. They said `'en'`
-  unconditionally, which made the screen-reader label wrong on every Android
-  phone that installed a Spanish card.
-- A dead branch in `apple-pass.ts` —
-  `locations.length === 1 ? 'Where to use it' : 'Where to use it'` — collapsed to
-  a single label. Both arms were identical, so the ternary conveyed an intent the
-  code never had.
-- Migration `000021` applied, so the feature has a schema to read.
+- **The banner (hero/strip) image is now reachable.** Upload at
+  `POST /api/v1/brand/logo?kind=hero`, rendered by `HeroStrip` in both platform
+  framings, consumed by Apple as `strip.png` and Google as `heroImage`. One route
+  serves both images, so the hero upload inherits the logo route's auth,
+  `settings:write` permission, `upload` rate limit and tenant-scoped storage key
+  rather than re-deriving them.
+- **The upload and embed ceilings are one number.** `MAX_PASS_IMAGE_BYTES`
+  (512 KB) is shared by the route, the client pre-check and the pass builder, so a
+  file that cannot reach the card is refused at the file picker in the merchant's
+  language instead of never.
+- **`secondaryColor` drives something.** It is the far stop of a `gradient` card.
+  Text must clear AA against **both** stops, because with a gradient the copy
+  crosses two colours and checking only the background is how a card ends up
+  readable at the top and invisible at the bottom.
 
-**The 5%:** `heroImageUrl` is stored, resolved and consumed by both providers
-(Apple `strip.png`, Google `heroImage`), but no component renders it and there is
-no upload control — a merchant can neither set nor preview it. `secondaryColor`
-is editable and stored but no surface renders it.
+**Fixed in the previous pass:** the whole card face is localised, and a dead
+ternary in `apple-pass.ts` (`locations.length === 1 ? 'Where to use it' : 'Where
+to use it'`) collapsed to one label.
+
+**The 2%:** `coverUrl` is stored and editable but renders nowhere — the one
+remaining half-wired brand field. Per-location card variants are not implemented
+(the primary key on `wallet_card_designs` is `business_id`), which is a deliberate
+scope choice rather than an omission.
 
 ---
 
 # Brand Kit status
 
-**Complete. 92%.**
+**Complete. 97%.**
 
-One record of business identity on the `businesses` row: name, description, logo
-/ icon / cover, four colours, font, seven contact fields, three social handles.
+One record of business identity on the `businesses` row: name, description, logo /
+icon / cover, four colours, font, seven contact fields, three social handles.
 Migration `000021` made it authoritative and removed the second source of truth
-(`wallet_settings.brand_color`, which used to be consulted *first* when building a
-pass, so a merchant who set a colour in Settings had two answers to one question
-with the less discoverable one winning).
+(`wallet_settings.brand_color`, previously consulted *first* when building a pass,
+so a merchant who set a colour in Settings had two answers to one question with
+the less discoverable one winning).
 
-**Fixed this session — the reuse requirement.** The previous revision's claim that
-the Brand Kit was read by "the wallet card, the public join page, the browser
-card, transactional email, campaigns and notifications" was **aspirational rather
-than true**. `getBrandKit` was consumed by exactly three API routes. Each of the
-other surfaces reached for `business.primary_color` directly with its own
-`?? '#111827'` / `?? '#f59e0b'` / `?? '#ffffff'` chain.
+**Correction to an earlier revision:** the 2026-08-27 status claimed the Brand Kit
+was already read by "the wallet card, the public join page, the browser card,
+transactional email, campaigns and notifications". That was aspirational.
+`getBrandKit` had three consumers; every other surface reached for
+`business.primary_color` with its own fallback chain — and used the *stored*
+`text_color` verbatim while the card resolver only honours a foreground that
+passes AA. The same two columns produced a legible wallet card and an illegible
+join page.
 
-That had a real consequence, not just duplication: those surfaces used the
-**stored** `text_color` verbatim, while `resolveCardDesign` only honours a stored
-foreground that passes WCAG AA. The same two columns therefore produced a legible
-wallet card and an illegible public join page. A merchant who set white text in
-March and a cream background in April got exactly that.
+Now genuinely centralised:
 
-Now centralised through two helpers:
-
-| Helper | Used by |
+| Consumer | Path |
 | --- | --- |
-| `resolveBrandPalette` | join page, browser card page, public gift shop |
-| `emailBrandFromRow` | the email shell, via `mapBrandKit` |
+| Wallet pass (both providers) | `mapBrandKit` → `resolveCardDesign` |
+| Public join page | `resolveBrandPalette` |
+| Browser card page | `resolveBrandPalette` |
+| Public gift shop | `resolveBrandPalette` |
+| Outbound email shell | `emailBrandFromRow` → `mapBrandKit` |
+| `LoyaltyCard` component | `meetsContrastAA` + `readableTextOn` (shared) |
+| Google class fallback | `DEFAULT_BRAND.primaryColor` |
+| Onboarding "has this been customised?" | `DEFAULT_BRAND` |
 
-The email shell also had its **own** contrast function whose comment claimed WCAG
-relative luminance while computing an unweighted channel average with no gamma
-correction and a 0.6 threshold. It disagreed with the card resolver often enough
-to matter. Both now go through the single implementation in `card-design.ts`, and
-a test asserts they agree across five brand colours.
+**Luminance is now implemented exactly once**, and that is enforced structurally:
+a test reads the source tree and asserts the WCAG coefficients appear in
+`card-design.ts` and nowhere else. No unit test on any single copy could have
+caught three copies disagreeing; only the count can.
 
-**The 8%:** campaigns and automations still compose their own copy and do not read
-brand imagery; `secondaryColor` and `coverUrl` have no rendering surface.
+**The 3%:** campaigns and automations compose their own copy and do not read brand
+imagery. `coverUrl` has no rendering surface.
 
 ---
 
 # Interactive onboarding status
 
-**Complete. 95%.** Not modified this session — it was already good.
+**Complete. 95%.** Not modified in this pass — it was already good.
 
-Flow: business type → loyalty strategy → reward → branding → wallet design →
-location → activation, with visual trade selection, smart per-trade defaults
-(`lib/onboarding/presets.ts`), a live card preview at every step, validation, a
-progress percentage, optional steps (plan and shop are skippable; program and
-card are not), and a completion screen that lists what is already running.
+Four wizard steps defined in one place (`STEPS` in `app/onboarding/page.tsx`) so
+the stepper, skip control, progress percentage and resume logic cannot disagree:
 
-It reads as *building a loyalty program* rather than filling in a form, which was
-the requirement.
+| Step | Required | Asks for |
+| --- | --- | --- |
+| `program` | **Yes** | Stamps or points, and what earns a reward |
+| `plan` | No | A plan, or "start my trial" |
+| `shop` | No | Shop name, address, city |
+| `card` | **Yes** | Palette, reward wording, goal — with a live preview |
 
-**Verified, not assumed:** 30 unit tests in `tests/unit/onboarding-resume.test.ts`
-pin the resume rules, including the three that matter most — a live trial is not
-evidence of choosing a plan (every signup has one); a stale cursor never jumps
-past a location that has since been deleted; and a cursor written by the previous
-wizard (`location`, before it was renamed `shop`) still resumes correctly.
+Only two screens can actually stop a merchant. Six required interactions, down
+from eleven, and the flow now covers *plan* and *location*, neither of which the
+original touched.
 
----
+The `card` step renders the **real** designer — same `CardPreview`, same
+`resolveCardDesign` — seeded from the trade's preset. A merchant confirms rather
+than composes, and what they see is what their customer installs.
 
-# Onboarding resume status
+## Onboarding resume — 100%
 
-**Complete. 100%.**
+Progress is persisted **server-side** in `business_onboarding.last_step`. Because
+the cursor is not in `localStorage`, it survives refresh, logout, a new login,
+closing the browser and session expiry — the whole list is satisfied by *where the
+cursor lives* rather than by handling each case.
 
-Progress is persisted **server-side** in `business_onboarding.last_step`, not in
-`localStorage`. That is what makes it survive the full list: refresh, logout,
-login, browser close and session expiry all resume at the right step, because the
-cursor never lived in the browser.
-
-The stored step is treated as a **hint, not an instruction**. The wizard
-recomputes which steps are genuinely outstanding from the account itself and uses
-the cursor only to avoid sending someone back to a screen they had already passed.
-`hasConfiguredLocation` deliberately does not count the placeholder location that
+It is a hint, not an instruction: `resumeStep` recomputes what is genuinely
+outstanding from the account. Three rules earn their tests — a live trial is not
+evidence of choosing a plan (every signup has one); a stale cursor never jumps a
+prerequisite that has since been deleted; a cursor written by the previous wizard
+(`location`, before the rename to `shop`) still resumes correctly.
+`hasConfiguredLocation` deliberately ignores the placeholder location
 `passimo_provision_business` creates at signup — treating that as an answer is
-what previously made the location step unreachable for every merchant, so no
-geofence had a centre and no pass carried a place.
+what previously made the location step unreachable for every merchant.
+
+Pinned by 30 tests.
 
 ---
 
@@ -235,40 +237,33 @@ geofence had a centre and no pass carried a place.
 
 **Complete. 100%.**
 
-A genuine interactive product simulation as a pure state machine
-(`lib/landing/demo.ts`), driven by a button. It requires no camera, no
-microphone, no location, no authentication, no external service and no hardware,
-and it works on desktop, laptop, tablet and mobile.
+A genuine interactive simulation as a pure state machine (`lib/landing/demo.ts`),
+driven by a button. It requires no camera, no microphone, no location, no
+authentication, no external service and no hardware, and works on desktop,
+laptop, tablet and mobile.
 
-The loop a visitor can drive: customer visit → points and stamps update →
-progress changes → reward unlocks → wallet card updates → merchant sees the
-result in analytics.
+The loop: customer visit → points and stamps update → progress changes → reward
+unlocks → wallet card updates → merchant sees it in analytics.
 
-Two design decisions worth recording because they are easy to get wrong:
+Two decisions worth recording:
 
-- It **opens mid-journey** (7 visits, 840 points, one stamp from the goal), so the
+- It **opens mid-journey** (7 visits, 840 points, one stamp from the goal) so the
   visitor's *first* click produces the unlock. A demo starting at zero asks a
   stranger to press a button eight times to see the point of the product.
-- Redeeming clears the stamps and **deliberately keeps the points**. That is the
-  two-speed loop real programs run — a fast stamp card for the habit, a slow
-  spend tier underneath that a customer never loses. Zeroing both would teach the
-  wrong model.
+- Redeeming clears the stamps and **keeps the points**. That is the two-speed loop
+  real programs run — a fast stamp card for the habit, a slow spend tier
+  underneath that a customer never loses.
 
-The customisation demo renders the **same** card templates a merchant is actually
-offered, so the marketing page cannot promise a design the designer will not
-produce.
+The customisation demo renders the **same** card templates a merchant is offered,
+so the marketing page cannot promise a design the designer will not produce.
 
-**Added this session:** 32 tests. The module's own header argued that "does the
-reward actually unlock at the goal" should not be a question answered by
-clicking — and it had shipped with no tests. They now pin the loop, the
-single-announcement guard (without it, a visitor who keeps clicking gets the
-celebration on every press, which reads as a bug), the points-tier countdown
-never going negative, and that **all 24 trade/palette combinations resolve to a
-card that passes WCAG AA**.
+32 tests pin the loop, the single-announcement guard (without it a visitor who
+keeps clicking gets the celebration every press, which reads as a bug), the
+points countdown never going negative, and that **all 24 trade/palette
+combinations resolve to a card passing WCAG AA**.
 
-**No fabricated traction anywhere.** No customer counts, no revenue figures, no
-testimonials. A single invented number discounts every true claim beside it, and
-this page has true claims worth protecting.
+**No fabricated traction anywhere** — no customer counts, no revenue figures, no
+testimonials. Verified by search, not asserted.
 
 ---
 
@@ -276,14 +271,14 @@ this page has true claims worth protecting.
 
 **Complete. 93%.**
 
-Redesigned, fully localised, responsive, and rendering the real card component
+Redesigned, fully localised, responsive, rendering the real card component
 through the real resolver. The mock browser chrome above the product showcase
-displays the host resolved from `NEXT_PUBLIC_APP_URL` rather than a hardcoded
-`passimo.app` — putting an unpurchased domain on the marketing page as though it
-were live would be a small lie in a place that cannot afford one.
+shows the host resolved from `NEXT_PUBLIC_APP_URL` rather than a hardcoded
+`passimo.app` — an unpurchased domain presented as live is a small lie in a place
+that cannot afford one.
 
-**The 7%:** no social proof section exists, correctly, because there is nothing
-honest to put in it yet. That is a launch-content gap rather than a code gap.
+**The 7%:** no social proof section, correctly, because there is nothing honest to
+put in it. A launch-content gap, not a code gap.
 
 ---
 
@@ -291,376 +286,442 @@ honest to put in it yet. That is a launch-content gap rather than a code gap.
 
 **Complete. 100%.** Correctly separated, which was the explicit requirement.
 
-| Surface | What it does |
+| Surface | Behaviour |
 | --- | --- |
-| **Landing page** | Visual product simulation. No camera API is referenced anywhere in `components/landing/`. |
-| **Merchant dashboard** | Real scanner. `ScanButton` in the dashboard shell (`app/dashboard/layout.tsx`) and the full-screen counter at `/pos`. |
+| **Landing page** | Visual simulation. No camera API referenced anywhere in `components/landing/`. |
+| **Merchant dashboard** | Real scanner — `ScanButton` in the dashboard shell, full-screen counter at `/pos`. |
 
 The real scanner uses the device camera through browser APIs
-(`lib/client/use-qr-scanner.ts` + `lib/client/qr-decode.ts`, `jsqr`), behind a
-login, on a device that is actually at a counter. It has manual search fallback,
-seven distinct scan outcomes, and an offline queue so a visit is never lost.
+(`lib/client/use-qr-scanner.ts` + `qr-decode.ts`, `jsqr`), behind a login, on a
+device actually at a counter. Manual search fallback, seven distinct scan
+outcomes, and an offline queue so a visit is never lost.
 
-Both experiences work independently. The previous demo led with a simulated
-scanner viewport; it was removed because most landing traffic is desktop, where a
-camera view is either irrelevant or — worse — reads as a permission request
-before the visitor knows what the product is. It also framed the product as
-*scanning*, which is the mechanism, when the thing worth paying for is the loop.
+The previous demo led with a simulated scanner viewport. It was removed because
+most landing traffic is desktop, where a camera view is either irrelevant or reads
+as a permission request before the visitor knows what the product is — and because
+it framed the product as *scanning*, which is the mechanism, when the thing worth
+paying for is the loop.
 
 ---
 
 # Localization status
 
-**Complete. 96%.** This was the bulk of the session's work.
+**Complete. 96%.**
 
-The mechanism was already strong: `en.ts` is the reference, `Dictionary` is
-derived from it with leaves widened to `string` so a missing Spanish key is a
-**build error**, and `tests/unit/i18n.test.ts` catches what types cannot —
-untranslated pastes, mismatched `{placeholders}`, half-declared plurals, blank
-values.
+The mechanism is strong: `en.ts` is the reference, `Dictionary` derives from it
+with leaves widened to `string` so a missing Spanish key is a **build error**, and
+`tests/unit/i18n.test.ts` catches what types cannot — untranslated pastes,
+mismatched `{placeholders}`, half-declared plurals, blank values.
 
-**The previous revision claimed 100% coverage. That was wrong**, and the way it
-was wrong is instructive: it was measured in *screens*, and by that measure it was
-nearly right. It missed everything that is not a screen.
+**Correction to an earlier revision:** the 2026-08-27 status claimed 100%
+coverage. It was measured in *screens*, and by that measure it was nearly right.
+It missed everything that is not a screen: the wallet card face, the email shell
+(`lang="es"` hardcoded on every message ever sent, with an English "Unsubscribe"
+inside it), proximity push fallbacks, gift-card emails, and the public gift shop —
+a real screen that owned no dictionary keys at all and so contributed nothing for
+a dictionary walk to notice.
 
-Fixed this session:
+All fixed. The locale rule is now consistent: a **customer** message prefers
+`customers.locale` (they stated a preference at enrolment); everything produced
+without a request uses `businesses.locale`. `lib/messaging/dispatch.ts` is the
+only place the distinction applies.
 
-| Surface | Was | Now |
-| --- | --- | --- |
-| **Wallet card face** | Every label an English literal in both providers; `en-GB` dates | `buildPassLabels`, business locale, shared date formatter |
-| **Email shell** | `lang="es"` hardcoded on every message; English "Unsubscribe" inside it; English "Powered by" | Locale-driven `lang`, translated footer |
-| **Gift card delivery + receipt** | Fully English; `en-GB` money and dates | Business locale, business currency |
-| **Membership renewal merge fields** | `en-GB` money and dates | Business locale, memoised per business |
-| **Proximity push fallbacks** | English — and these are the version most customers saw, since they fire only when the merchant has *not* written their own copy | Business locale |
-| **Public gift shop** | Entirely English; owned no dictionary keys at all; hardcoded `€` regardless of the business's currency | Fully localised, currency from the row |
-| **Partnership / gift-card-sale / service-recovery notices** | English; the sale notice printed `25.00` with no currency symbol | Recipient's locale, currency from the row |
-| **Location CSV import errors** | English | Business locale |
-| **Two public pages' error handling** | Took the server's English sentence *first* | Route through `toastError`, which prefers our own translated copy per error code |
+The screen-coverage test now carries the non-screen surfaces — `wallet.pass`,
+`wallet.push`, `emails`, `giftShop`, `join` — as named entries, so this blind spot
+cannot reopen silently.
 
-The locale rule is now consistent and documented: a **customer** message prefers
-`customers.locale` (they stated a preference at enrolment); everything else
-produced without a request uses `businesses.locale`. `lib/messaging/dispatch.ts`
-is the only place the distinction applies.
+Background `Intl` calls no longer carry `'en-GB'` literals: gift-card emails had
+English month names in front of Spanish customers, and the gift-card-sold
+notification printed `25.00` with no currency symbol at all.
 
-**The screen-coverage test now carries the non-screen surfaces** — `wallet.pass`,
-`wallet.push`, `emails`, `giftShop`, `join` — as named entries, so this specific
-blind spot cannot reopen silently.
-
-**The 4%:** server-side Zod validation messages (`lib/api/schemas.ts`) are
-English. They surface only for a malformed request that the client's own
-validation should have caught first, and the error envelope already carries a
-stable `code` that `lib/client/api-errors.ts` translates — so the English prose is
-the last fallback, not the first. Closing it properly means per-field error codes,
-which is a real refactor rather than a string sweep.
+**The 4%:** server-side Zod validation messages are English. They surface only for
+a malformed request the client's own validation should have caught, and the error
+envelope's stable `code` is translated first by `lib/client/api-errors.ts` — so
+the English prose is the last fallback, not the first. Closing it properly means
+per-field error codes, a real refactor rather than a string sweep.
 
 ---
 
 # Mobile UX status
 
-**Good. 88%. Verified by inspection, not by device testing.**
+**Good. 88%. Inspection-based.**
 
-Grounds for the number: touch targets on the public flows are `h-12`/`h-14`
-(48–56px, above the 44px guideline); `viewport` and `themeColor` are exported
-from the root layout; the Playwright suite defines a Pixel 7 project alongside
-Desktop Chrome; layouts use responsive Tailwind throughout; the counter scanner
-is designed full-screen for a phone at a till; `inputMode="numeric"` is set where
-it matters.
+Grounds: touch targets on public flows are `h-12`/`h-14` (48–56 px, above the
+44 px guideline); `viewport` and `themeColor` exported from the root layout;
+`inputMode="numeric"` where it matters; responsive Tailwind throughout; the
+counter scanner designed full-screen for a phone at a till; a Pixel 7 Playwright
+project defined alongside Desktop Chrome.
 
-**Caveat, stated plainly:** the mobile e2e project **was not run this session**,
-because it needs a production build. "88%" is a code-reading judgement, not a
-measurement. Running `pnpm test:e2e` is what would turn it into one.
+**Caveat:** the mobile e2e project **was not run**, because it needs a production
+build. 88% is a code-reading judgement, not a measurement.
 
 ---
 
 # Accessibility status
 
-**Reasonable. 82%. Inspection-based; no audit tool was run.**
+**Reasonable. 82%. Inspection-based; no audit tool run.**
 
-Grounds: 369 `aria-*` attributes and 74 explicit `role=` attributes across
-`app/` and `components/`; 28 `sr-only` labels; `<html lang>` is set dynamically
-from the resolved locale (not hardcoded), which is what screen readers and search
-engines read; `role="alert"` on error regions; Radix primitives underpin the
-interactive components, which brings focus management and keyboard handling.
+Grounds: 369 `aria-*` attributes and 74 explicit `role=` attributes across `app/`
+and `components/`; 28 `sr-only` labels; `<html lang>` set dynamically from the
+resolved locale; `role="alert"` on error regions; Radix primitives underpinning
+the interactive components, which brings focus management and keyboard handling.
 
-The contrast work is genuinely load-bearing rather than cosmetic: WCAG AA is
-enforced in code for the card, the join page, the browser card, the gift shop and
-the email header, and a test asserts the guarantee holds across every
-background/foreground pairing and all 24 landing-demo combinations.
+The contrast work is load-bearing rather than cosmetic, and it is the part that is
+genuinely *proven*: WCAG AA is enforced in code for the card, the join page, the
+browser card, the gift shop, the `LoyaltyCard` component and the email header, and
+tests assert the guarantee holds across every background/foreground pairing, all
+24 landing-demo combinations, and both stops of a gradient.
 
-**Not verified:** no axe, Lighthouse or screen-reader pass has been run. Keyboard
-traversal of the full dashboard has not been walked. Treat 82% as "built with
-accessibility in mind and provably correct on contrast", not "audited".
+**Not verified:** no axe, Lighthouse or screen-reader pass. Keyboard traversal of
+the full dashboard has not been walked. 82% means "built with accessibility in
+mind and provably correct on contrast", not "audited".
 
 ---
 
 # Performance status
 
-**Adequate. 80%. Partly measured, partly not.**
+**Adequate. 80%.**
 
-What is genuinely good: every checklist count is a `head: true` count, so a
-workspace with 40,000 scans does not pay for a row scan to render a checklist;
-analytics are computed from `activity_events` and `loyalty_ledger` rather than
-recomputed per request; the business-locale lookup is memoised for a minute so a
-cron fan-out does not read one row hundreds of times; `lib/rate-limit-cache.ts` is
-bounded and tested, on the highest-volume endpoint in the product; migrations
-carry deliberate indexes.
+Genuinely good: every checklist count is a `head: true` count, so a workspace with
+40,000 scans does not pay for a row scan to render a checklist; analytics are
+computed from `activity_events` and `loyalty_ledger`; the business-locale lookup is
+memoised for a minute so a cron fan-out does not read one row hundreds of times;
+`lib/rate-limit-cache.ts` is bounded and tested on the highest-volume endpoint;
+migrations carry deliberate indexes.
 
 Two honest notes:
 
-- `next.config.mjs` sets `images: { unoptimized: true }`. That is a defensible
-  choice for a standalone container with no image CDN, but it means merchant logos
-  and hero images are served at whatever size they were uploaded. With merchant-
-  supplied images on a customer-facing card page, this is the first performance
-  thing to revisit.
-- **No production build was run this session**, so there are no current bundle
-  figures. The unit suite runs in ~14s and the integration suite in ~20s.
+- `next.config.mjs` sets `images: { unoptimized: true }`. Defensible for a
+  standalone container with no image CDN, but merchant logos and banners are
+  served at upload size. With merchant-supplied images now on three
+  customer-facing surfaces, this is the first performance item to revisit — the
+  512 KB ceiling limits the damage.
+- **No production build was run**, so there are no current bundle figures. Unit
+  suite ~10–17 s, integration ~11 s.
+
+The membership-renewal sweep resolves one locale per *distinct* business rather
+than per membership; on a daily cron over ≤2,000 rows that is a handful of
+memoised reads.
 
 ---
 
-# Database migration status
+# Database status
 
-**Complete. 100%. And this is where the most important fix of the session was.**
+**Complete. 100%. This is where the most important verification of the session happened.**
 
 | Item | State |
 | --- | --- |
 | Direction | Railway + PostgreSQL. Confirmed. |
-| Supabase | **Zero.** No package, no client, no auth, no storage, no realtime, no generated types, no environment variables in first-party code. |
-| Migrations | **22 of 22 applied.** `000021_brand_kit_and_card_design.sql` was pending on recovery and has been applied. |
-| Schema verified | `wallet_card_designs` present, 22 columns, primary key on `business_id`, both `card_style` and `progress_style` check constraints. 11 brand columns present on `businesses`. |
-| Local development | Unchanged and working. `pnpm db:up` → `db:migrate` → `seed:demo`. `env.appUrl` falls back to `http://localhost:3000`. |
-| Production domain | Through `NEXT_PUBLIC_APP_URL` only. `passimo.app` appears in source **exclusively inside comments explaining why it is not hardcoded**, plus one RFC-required VAPID contact URI fallback. |
-| Credentials | None hardcoded anywhere. `DATABASE_URL` is the entire coupling to the database host. |
+| Supabase | **Zero.** No package, no client, no auth, no storage, no realtime, no generated types, no env vars in first-party code. |
+| Migrations | **22 of 22.** |
+| **Reproducible from empty** | **Yes — verified.** `pnpm db:reset` dropped and recreated the schema and replayed all 22 migrations cleanly, including `000021`. |
+| Post-reset schema | `wallet_card_designs`: 22 columns, 16 check constraints, PK on `business_id`. 11 brand columns on `businesses`. `schema_migrations`: 22 rows. |
+| Seed on fresh schema | `pnpm seed:demo` succeeded — 4 merchants, 140–1,240 customers each, platform admin. |
+| Integration tests on fresh schema | **71 passed.** |
+| Local development | `pnpm db:up` → `db:migrate` → `seed:demo`. Working. |
+| Credentials | None hardcoded. `DATABASE_URL` is the entire coupling to the database host. |
 
-**The unapplied migration was a genuine launch-blocking defect.** The code that
-reads `wallet_card_designs` had shipped; the table did not exist. The first
-merchant to open the card designer would have hit a 500. It is worth noting how
-it happened: the migration runner verifies a SHA-256 per file and is correct, but
-nothing in the previous session's workflow ran it after writing the migration.
+The previous pass applied `000021` manually after finding it pending. That was
+necessary but not sufficient: applying a migration by hand proves nothing about a
+fresh deployment. Replaying from an empty schema is the criterion, and it now
+passes — which is what makes the first Railway deploy a rehearsal rather than an
+experiment.
 
-Current database contents: 25 businesses, 2,694 customers, 25 loyalty programs,
-2,694 loyalty accounts, 4 card designs (a missing design row is the default
-design, not an error — verified by test).
+---
+
+# Subscription status
+
+**Complete. 95%.**
+
+| Requirement | State |
+| --- | --- |
+| No free plan | **Confirmed.** `PLAN_IDS` is `lapsed, starter, growth, pro, business`. `lapsed` is a paused state, never a working tier. |
+| $5/month floor | **Confirmed.** `starter.monthlyPrice = 5`. |
+| Tiers | starter $5, growth $19, pro $49, business $99; annual = ten months. |
+| Feature gates | `requireFeature` / `requireWithinLimit`, returning `402` with structured `details` distinct from `403` (role). |
+| Trial and lapse | 14 days fully unlocked, no card. On lapse the workspace goes read-only — nothing is deleted. |
+| Legacy rows | `free` and `enterprise` map to `lapsed`. |
+| Paywall copy | Rebuilt from `details` in the browser, so the merchant reads the same numbers the server enforced, in their language. |
+
+Plan taglines and bullets are translation **keys**, not prose, with a unit test
+asserting they are keys — the pricing page previously advertised in English on the
+Spanish site. Tier *names* stay literal ("Growth" is what appears on the invoice).
+
+**The 5%:** credential-dependent — see Billing.
+
+---
+
+# Billing status
+
+**Implemented, unexercised. 75%.**
+
+Everything is written and tested; nothing has ever taken a payment.
+
+| Piece | State |
+| --- | --- |
+| Checkout, portal, plan changes | Implemented |
+| Webhook handling | Implemented, with **idempotency** — a replayed Stripe event is applied once, not twice or never |
+| Dunning | Four-stage ladder with localised email at each stage; a declined card ends in a warned merchant, not a silently paused workspace |
+| Soft limits | Overage warns and keeps enrolling — nobody is turned away mid-service |
+| Tests | `billing.test.ts`, `billing-dunning.test.ts`, plus `webhook-idempotency` in the coverage floor |
+
+**Blocked on:** a Stripe account. No key, no price IDs, no webhook secret. The
+failure paths carry the same coverage floor as the money logic precisely because
+they are invisible when they misbehave — they just go quiet.
+
+---
+
+# Security status
+
+**Good. 88%.**
+
+| Area | State |
+| --- | --- |
+| Authentication | Own users, Argon2-class hashing, sessions, reset, verification. Verified by `auth-lifecycle.test.ts` against real PostgreSQL — lockout, suspension, revocation, expiry, single-use tokens, cascade on delete. |
+| Authorization | Role/permission matrix enforced in `defineRoute`; `403` (role) distinct from `402` (plan). |
+| Tenant isolation | `tenant-isolation.test.ts` is **written as attacks** — two real tenants and every attempt by one to reach the other. Plus row-level security realigned in migration `000018`. |
+| Input validation | Zod at every route boundary; colours normalised rather than trusted before reaching a style attribute. |
+| Secrets | None hardcoded. `lib/env.ts` is the only reader; a missing variable is a `503` naming the variable, never its value. |
+| Webhooks | Stripe signature verification; shared-secret comparison via `safeEqual` (constant-time). |
+| Uploads | Magic-number sniffing — the declared `Content-Type` is a hint, never a decision. **SVG deliberately rejected** (it is a document, it can carry `<script>`, and serving merchant markup inline from our own origin is stored XSS with extra steps). Content-hashed, tenant-scoped keys. Declared length checked before buffering. |
+| Rate limiting | Per-route classes including a dedicated `upload` class; the cache is bounded and tested. |
+| GDPR | Export excludes push tokens and wallet secrets; delivered by time-limited signed URL, never a public object. Deletion anonymises rather than orphans. |
+
+The hero-image upload added this pass introduced **no new attack surface**: it
+reuses the audited logo route, so it inherits the same auth, permission, rate
+limit, sniffing and tenant-scoped key. That was the reason for one route rather
+than two.
+
+**The 12%:** no MFA, no OAuth (documented as absent in `AUTHENTICATION.md`); the
+`s3` storage driver is untested against a real bucket; no penetration test has
+been performed.
 
 ---
 
 # Testing status
 
-**Good, with one real hole. 85%.**
+**Good, with one real hole. 86%.**
 
 | Suite | Result |
 | --- | --- |
-| Unit — `pnpm test` | **634 passed, 26 files.** Was 493 / 22 on recovery. |
+| Unit — `pnpm test` | **647 passed, 26 files** |
 | Integration — `pnpm test:integration` (real PostgreSQL 16) | **71 passed, 4 files** |
+| Integration re-run on a freshly rebuilt schema | **71 passed** |
 | `pnpm typecheck` | Clean |
 | `pnpm lint` | Clean — 0 errors, 0 warnings |
-| End-to-end — `pnpm test:e2e` | **Not run.** Requires a production build, which was not performed this session. |
+| End-to-end — `pnpm test:e2e` | **Not run.** Needs a production build. |
 
-**141 tests added**, covering the feature that had none:
+**154 tests added across the two passes** (493 → 647), covering a feature that had
+none:
 
 | File | Tests | Covers |
 | --- | --- | --- |
-| `wallet-card-design.test.ts` | 55 | Hex parsing; WCAG ratios against published values; the AA guarantee across every background/foreground pairing; progress-style resolution and its boundary at 12 stamps; row mapping and enum fallback; Brand Kit mapping; handle normalisation; patch building; `resolveBrandPalette` agreeing with the card resolver |
-| `wallet-pass-build.test.ts` | 33 | Apple `pass.json` and Google class/object structure; the ten-location cap and widest-radius `maxDistance`; locale-correct dates; a guard that no English phrase survives on a Spanish pass |
+| `wallet-card-design.test.ts` | 66 | Hex parsing; WCAG ratios against published values; the AA guarantee across every pairing; the gradient two-stop rule and its documented irreconcilable fallback; progress-style resolution and its 12-stamp boundary; row mapping and enum fallback; Brand Kit mapping; handle normalisation; patch building; **luminance implemented exactly once** |
+| `wallet-pass-build.test.ts` | 35 | Apple `pass.json` and Google class/object structure; the ten-location cap and widest-radius `maxDistance`; locale-correct dates; **upload ceiling equals embed ceiling**; a guard that no English phrase survives on a Spanish pass |
 | `email-shell.test.ts` | 21 | The shell agreeing with the card on text colour; `lang`; translated footer; HTML escaping of merchant copy |
 | `landing-demo.test.ts` | 32 | The demo loop; repeat cycles; points surviving redemption; all 24 trade/palette combinations legible |
 
-Three of my own test expectations were wrong and the code was right — Spanish
-`es-ES` does not zero-pad the month, `Contacto` contains `Contact`, and
-`normalizeHandle` correctly splits on `/` to handle pasted URL paths. Those were
-corrected in the tests, not worked around in the code. **No test was weakened or
-disabled**, and the i18n suite caught one genuine issue in my own work (`María` as
-a placeholder), which is the suite doing its job.
+Two of those are **structural** rather than behavioural, and both exist because
+the bug they guard is a *duplicate*, which no test of any single function can see.
+Counting the copies is the only thing that catches it.
 
-**The hole is e2e.** `tests/e2e/merchant-journey.spec.ts` (326 lines) exists and
-walks the full flow, but it has not been executed against this tree. That is the
-single largest gap in the verification story below.
+Four of my own test expectations were wrong and the code was right — `es-ES` does
+not zero-pad months; `Contacto` contains `Contact`; `normalizeHandle` correctly
+splits on `/`; and a near-black-to-cream gradient genuinely has no single legible
+text colour. All four were corrected in the tests, not worked around in the code.
+**No test was weakened, disabled or skipped.** The i18n suite caught one genuine
+issue in my own work (`María` used as a placeholder), which is the suite doing its
+job.
 
----
+**The hole is e2e.** `tests/e2e/merchant-journey.spec.ts` (326 lines) walks the
+full flow and has not been executed against this tree.
 
-# Real merchant journey status
-
-**Partially verified. Honest answer: not end-to-end this session.**
+## Merchant journey — verified where it can be, honestly labelled where it cannot
 
 | Step | Verification |
 | --- | --- |
-| Sign up, session lifecycle, lockout, revocation | **Verified** — `auth-lifecycle.test.ts`, real PostgreSQL |
-| Business creation and provisioning | **Verified** — integration suite |
-| Business type → strategy → reward → branding → card design → location → activate | **Verified by unit test** for the resume/step logic and preset defaults; **not** clicked through a browser |
-| Customer creation, loyalty transaction, reward redemption | **Verified** — `loyalty-flow.test.ts` against real PostgreSQL |
-| Tenant isolation | **Verified** — `tenant-isolation.test.ts`, written as attacks |
-| Scanner → visit → points → progress → unlock | **Verified at the logic layer**; the camera path is only exercisable by e2e |
+| Signup, session lifecycle, lockout, revocation | **Verified** — real PostgreSQL |
+| Business creation and provisioning | **Verified** — integration suite, on a schema rebuilt from empty |
+| Program → plan → shop → card → activate | **Verified by unit test** for resume logic and presets; not clicked through a browser |
+| Brand Kit configuration, wallet customization, preview | **Verified** — schema present, store and resolver tested, both providers tested |
+| Customer creation, loyalty transaction, reward redemption | **Verified** — real PostgreSQL |
+| Subscription gating | **Verified** — unit tests on plans, gates and limits |
+| Tenant isolation | **Verified** — attack-shaped integration tests |
+| Scanner → visit → points → unlock | **Verified at the logic layer**; the camera path needs e2e |
 | Analytics reflecting the above | **Not verified this session** |
-| Wallet customisation persisting and reaching a pass | **Verified** — schema present, store tested, `buildPassContent` → both providers tested |
-
-I did **not** claim this as a completed browser-driven journey, because it was
-not one. What is verified is verified against real database state via the
-integration suite; the rest needs `pnpm build && pnpm test:e2e`.
 
 ---
 
 # Documentation status
 
-**Good. 90%.**
+**Good. 92%.** 20 documents in `/docs`.
 
-`/docs` holds 20 documents. Added and corrected this session:
+Added and corrected across these passes:
 
-- **`docs/BRAND_AND_CARD_DESIGN.md` — new.** The Brand Kit, the card design model,
-  the contrast guarantee and why it overrides the merchant, progress resolution
-  and the 12-stamp limit, templates, the previews, card-face localisation, the
+- **`docs/BRAND_AND_CARD_DESIGN.md` — new, then extended.** The Brand Kit, the card
+  design model, the contrast guarantee and why it overrides the merchant, progress
+  resolution and the 12-stamp limit, templates, previews, card-face localisation,
+  the hero image, the second brand colour, the size-ceiling bug, the structural
   tests, and an explicit table of what a merchant still cannot set. The docs had
   **zero** coverage of this feature before.
-- **`docs/INTERNATIONALIZATION.md` — corrected.** Its "100% coverage" claim is
-  replaced with an accurate account, including *why* the claim was wrong
-  (measured in screens, missed everything that is not a screen) and a table of
-  which background surfaces resolve which locale.
-- **`docs/TESTING.md` — corrected.** Counts updated to 634 / 71; the new suites
-  described; and the e2e suite explicitly marked as written-but-not-run rather
-  than left implying it passes.
+- **`docs/ONBOARDING.md` — corrected.** It described a three-step flow; the wizard
+  has four steps and had gained a `program` step the doc never mentioned. Now
+  accurate, with a resume section.
+- **`docs/INTERNATIONALIZATION.md` — corrected.** The false "100%" replaced with an
+  accurate account including *why* it was wrong, plus a table of which background
+  surface resolves which locale.
+- **`docs/TESTING.md` — corrected.** Counts updated; new suites described; the e2e
+  suite explicitly marked written-but-not-run rather than left implying it passes.
 - **`docs/README.md`** — index updated.
 
-The documentation convention is worth preserving: *implemented / partial /
-planned / credential-dependent*, limitations listed rather than omitted, and no
-invented traction.
+Credential-dependent integrations are marked as such throughout, using the
+established labels: *implemented / partial / planned / credential-dependent*.
 
-**The 10%:** `ONBOARDING.md` still describes a "three-step flow" and predates the
-rebuilt wizard. `STORE_EXPERIENCE.md` and `API.md` have not been re-read against
-the current code this session.
+**The 8%:** `STORE_EXPERIENCE.md` and `API.md` have not been re-read against
+current code in these passes. `API.md` does not document the `kind=hero` upload
+parameter added today.
 
 ---
 
 # Overall completion
 
-## **91%**
+## **93%**
 
-| Area | Weight | Score |
-| --- | --- | --- |
-| Wallet customisation | high | 95% |
-| Brand Kit | high | 92% |
-| Interactive onboarding | high | 95% |
-| Onboarding resume | medium | 100% |
-| Landing page + demo | medium | 95% |
-| QR scanner separation | high | 100% |
-| Localisation | high | 96% |
-| Database / infrastructure | high | 100% |
-| Testing | high | 85% |
-| Documentation | medium | 90% |
-| Mobile UX | medium | 88% |
-| Accessibility | medium | 82% |
-| Performance | medium | 80% |
+| Area | Score |
+| --- | --- |
+| Brand migration | 100% |
+| Database / infrastructure | 100% |
+| QR scanner separation | 100% |
+| Onboarding resume | 100% |
+| Landing demo | 100% |
+| Wallet customization | 98% |
+| Brand Kit | 97% |
+| Localisation | 96% |
+| Interactive onboarding | 95% |
+| Subscriptions | 95% |
+| Landing page | 93% |
+| Documentation | 92% |
+| Security | 88% |
+| Mobile UX | 88% |
+| Testing | 86% |
+| Accessibility | 82% |
+| Performance | 80% |
+| Billing (credential-gated) | 75% |
 
-Up from the previous revision's 88%. The increase is earned by real gaps closed —
-an unapplied migration, an unlocalised customer-facing card, an untested
-feature, four duplicated brand-resolution paths — and held back by the build and
-e2e suites not having been run.
+Up from 91% in the previous revision. The increase is earned by clean-slate
+migration reproducibility being *proven* rather than assumed, two half-wired brand
+fields being finished, a silent image-size mismatch closed, and the third contrast
+implementation removed with a structural guard against a fourth. Held back
+primarily by the build and e2e suites not having been run.
 
 # Launch readiness score
 
 | Scenario | Score | Basis |
 | --- | --- | --- |
-| **Pilot cohort — hand-held first merchants** | **87 / 100** | A merchant can be onboarded, customise their card, scan customers and be billed manually today. Up 2 from the previous revision: the migration fix removed a certain first-use failure, and the card is no longer English for a Spanish merchant. Held back from higher only by the unrun build/e2e. |
-| **Public self-service launch** | **64 / 100** | Blocked on four accounts that do not exist — Stripe, Apple Wallet, Google Wallet, Resend — and on the fact that **no production deployment has ever run**. Neither is a code problem, and neither can be fixed by writing more code. |
+| **Pilot cohort — hand-held first merchants** | **89 / 100** | A merchant can be onboarded, customise their card end to end including logo and banner, scan customers, and be billed manually today. Up 2: the schema is provably reproducible, and the two remaining "set it and nothing happens" fields are gone. Held back only by the unrun build/e2e. |
+| **Public self-service launch** | **66 / 100** | Blocked on four accounts that do not exist — Stripe, Apple Wallet, Google Wallet, Resend — and on the fact that **no production deployment has ever run**. Neither is a code problem; neither is closable by writing more code. |
 
-Those two numbers are not comparable to the 2026-08-01 audit's single 78/100,
-which predates the infrastructure migration, the onboarding rebuild and every
-test suite that now exists.
+Not comparable to the 2026-08-01 audit's single 78/100, which predates the
+infrastructure migration, the onboarding rebuild and every test suite that exists.
 
 ---
 
 # Remaining issues
 
-Ordered by what would hurt a real merchant soonest.
+## Genuinely missing implementation
 
-### P0 — do before the next merchant touches it
+Only two items, both small:
 
-1. **Run `pnpm build` and `pnpm test:e2e`.** Everything in this session was
-   verified by typecheck, unit and integration tests. The production build and the
-   browser journey are unverified against this tree. This is the largest known
-   unknown in the document.
-2. **Do one throwaway Railway deployment.** Every word in `docs/RAILWAY.md` is
-   written from configuration, not experience. An unrehearsed first deploy during
-   a merchant's onboarding is the worst possible time to discover a config gap.
+1. **`coverUrl` renders nowhere.** Stored and editable, no surface. Finish it or
+   remove the field — a half-wired field makes the rest of the screen suspect,
+   which is exactly the reasoning applied to `heroImageUrl` and `secondaryColor`
+   today.
+2. **Server-side Zod validation messages are English.** Last-fallback only; the
+   error envelope's `code` is translated first. Closing it means per-field error
+   codes.
 
-### P1 — credential-gated, and nothing ships without them
+## Verification gaps — not code, but not nothing
 
-3. **Apple Wallet certificates.** The builder and its `pass.json` are complete and
-   tested; no pass can be issued. `appleWalletConfigured()` returns false and the
-   UI says so honestly.
-4. **Google Wallet issuer account.** Same position.
-5. **Stripe account.** Billing, dunning and webhook idempotency are implemented
-   and tested; no payment can be taken.
-6. **Resend (or any SMTP).** Every email path is written and the shell is now
-   correctly localised; nothing can be delivered.
+3. **`pnpm build` has not been run against this tree.** The largest unknown here.
+4. **`pnpm test:e2e` has not been run**, including the mobile viewport project.
+5. **No accessibility audit** (axe / Lighthouse / screen reader) and no real-device
+   mobile pass.
+6. **No production deployment has ever run.** Everything in `docs/RAILWAY.md` is
+   written from configuration, not experience.
 
-### P2 — real product gaps
+## Credential-dependent — implemented, cannot be exercised
 
-7. **`heroImageUrl` is unreachable.** Stored, resolved, consumed by both
-   providers — and with no upload control and no component rendering it, a
-   merchant can neither set nor see it. Either finish it or remove it from the
-   model; a half-wired field is worse than neither.
-8. **`secondaryColor` renders nowhere.** Editable and stored, with no surface. Same
-   choice: finish or remove.
-9. **`docs/ONBOARDING.md` is stale.** It describes a three-step flow that no
-   longer exists.
-10. **`images: { unoptimized: true }`** with merchant-supplied logos on
-    customer-facing pages. Revisit when there is a CDN.
+Each of these is complete in code and tested to the limit that is possible without
+an account. None is missing implementation.
 
-### P3 — known and acceptable for now
+7. **Apple Wallet** — builder and `pass.json` complete and unit-tested; no
+   certificates. `appleWalletConfigured()` returns false and the UI says so.
+8. **Google Wallet** — class and object builders complete and unit-tested; no
+   issuer account.
+9. **Stripe** — checkout, portal, webhooks, idempotency and dunning complete; no
+   key.
+10. **Resend / SMTP** — every email path written and correctly localised; nothing
+    can be delivered.
+11. **S3 storage driver** — implemented, untested against a real bucket. The
+    `local` driver is what development and a single-container deploy use.
 
-11. **Server-side Zod validation messages are English.** Last-fallback only; the
-    error envelope's `code` is translated first. Closing it means per-field error
-    codes.
-12. **No MFA, no OAuth.** Documented in `AUTHENTICATION.md` as absent.
-13. **`components/ui/pagination.tsx` has English `aria-label`s** and is imported
-    by nothing. Vendored shadcn primitive; harmless while unused, needs
-    localising if it is ever used.
-14. **Accessibility has not been audited** by tooling, and mobile has not been
-    tested on a device.
-15. **No version control.** The repository is not a git repo. Every safeguard in
-    this project — the migration checksums, the type-enforced dictionary, the test
-    floors — assumes a history that does not exist. The six dead email templates
-    removed this session were backed up outside the project for exactly that
-    reason. `git init` is the cheapest risk reduction available.
+## Accepted, documented
+
+12. **No MFA, no OAuth** — documented as absent.
+13. **`images: { unoptimized: true }`** with merchant images on three
+    customer-facing surfaces. The 512 KB ceiling limits the damage.
+14. **`components/ui/pagination.tsx` has English `aria-label`s** and is imported by
+    nothing. Vendored shadcn primitive; needs localising only if it is ever used.
+15. **No version control.** The repository is not a git repo. Every safeguard here
+    — migration checksums, the type-enforced dictionary, the coverage floors,
+    the structural tests — assumes a history that does not exist. The six dead
+    email templates removed in the previous pass were backed up outside the
+    project for exactly that reason. **`git init` is the cheapest risk reduction
+    available and should happen before anything else on this list.**
 
 ---
 
 # Recommended roadmap
 
-### This week — make it provable
+### Immediately — make it provable
 
-- `pnpm build`, then `pnpm test:e2e` on both viewports. Fix what falls out.
-- `git init` and a first commit. Nothing below is safe without it.
-- One throwaway Railway deploy, then tear it down. Write down what
-  `docs/RAILWAY.md` got wrong.
+- **`git init` and a first commit.** Nothing below is safe without it.
+- **`pnpm build`**, then **`pnpm test:e2e`** on both viewports. Fix what falls out.
+- One **throwaway Railway deploy**, then tear it down, and correct
+  `docs/RAILWAY.md` from what actually happened. The schema now provably rebuilds
+  from empty, so this is a rehearsal rather than an experiment.
 
-### Next — open the accounts
+### Next — open the accounts, in this order
 
-- Stripe, Apple Wallet, Google Wallet, Resend, in that order. Stripe first because
-  it is the only one that unblocks *revenue* rather than a feature; Apple before
-  Google because iOS is the larger wallet share in the target market.
-- After each, run the corresponding path against real credentials once. The code
-  is tested; the *integration* is not.
+- **Stripe** first: it is the only one that unblocks *revenue* rather than a
+  feature.
+- **Apple Wallet** before Google: iOS is the larger wallet share in the target
+  market.
+- **Google Wallet**, then **Resend**.
+- After each, exercise the corresponding path against real credentials once. The
+  code is tested; the *integration* is not.
 
 ### Then — pilot cohort
 
 - Three to five merchants, onboarded by hand, billed manually.
-- Instrument the onboarding funnel. The wizard's resume logic is well tested but
-  nobody has watched a real café owner use it between customers, which is the
-  situation it was designed for.
-- Finish or delete `heroImageUrl` and `secondaryColor` based on whether any pilot
-  merchant asks for them.
+- Instrument the onboarding funnel. The resume logic is well tested but nobody has
+  watched a real café owner use it between customers, which is the situation it
+  was designed for.
+- Decide `coverUrl` on evidence: finish it if a pilot merchant asks, delete it
+  otherwise.
 
 ### Before public self-service
 
-- Accessibility audit (axe + one screen-reader pass) and a real-device mobile
-  pass.
+- Accessibility audit (axe + one screen-reader pass) and a real-device mobile pass.
 - Per-field validation error codes, closing the last English-fallback path.
 - Image optimisation with a CDN.
-- Load-test the scan endpoint. It is the highest-volume path and its rate limiter
-  is the only unbounded-growth surface in a request path.
+- Load-test the scan endpoint — highest-volume path, and its rate limiter is the
+  only unbounded-growth surface in a request path.
 
-### Deliberately not recommended yet
+### Deliberately not recommended
 
-- More features. The product is feature-complete against its spec at 91%. The
-  remaining 9% is not code, and the gap between "ready for a pilot" (87) and
-  "ready for the public" (64) is entirely accounts, one deployment, and
-  verification — none of which more code will close.
+- **More features.** The product is feature-complete against its spec at 93%, and
+  the two genuinely missing items are a colour field nothing renders and an error
+  message nobody sees in normal use. The gap between "ready for a pilot" (89) and
+  "ready for the public" (66) is four accounts, one deployment, and three
+  verification runs. None of it is closable by writing more code.

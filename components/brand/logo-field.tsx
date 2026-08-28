@@ -34,6 +34,44 @@ import type { TranslationKey } from '@/lib/i18n/dictionaries/en'
  * afternoon.
  */
 
+/**
+ * Which image this instance edits.
+ *
+ * The control is shared with the card's hero/strip image, because the mechanics
+ * are identical — same formats, same size ceiling, same storage-disabled
+ * fallback — and only the wording and the thumbnail shape differ. Duplicating
+ * 200 lines to change four labels is how two upload controls end up disagreeing
+ * about what a valid file is.
+ */
+export type ImageFieldCopy = {
+  label: TranslationKey
+  upload: TranslationKey
+  replace: TranslationKey
+  hint: TranslationKey
+  /** `contain` for a logo, `cover` for a photographic strip. */
+  fit: 'contain' | 'cover'
+  /** The thumbnail's aspect. A strip is not square and must not preview square. */
+  shape: 'square' | 'wide'
+}
+
+export const LOGO_COPY: ImageFieldCopy = {
+  label: 'brandKit.logo',
+  upload: 'brandKit.logoUpload',
+  replace: 'brandKit.logoReplace',
+  hint: 'brandKit.logoHint',
+  fit: 'contain',
+  shape: 'square',
+}
+
+export const HERO_COPY: ImageFieldCopy = {
+  label: 'cardDesign.hero',
+  upload: 'cardDesign.heroUpload',
+  replace: 'cardDesign.heroReplace',
+  hint: 'cardDesign.heroHint',
+  fit: 'cover',
+  shape: 'wide',
+}
+
 export type LogoFieldProps = {
   value: string | null
   /** False when this deployment cannot store files; shows the URL fallback. */
@@ -44,6 +82,8 @@ export type LogoFieldProps = {
   onChange: (value: string | null) => void
   /** Painted behind the mark, so contrast is judged against the real card. */
   previewBackground?: string
+  /** Defaults to the logo wording, so existing call sites are unchanged. */
+  copy?: ImageFieldCopy
   className?: string
 }
 
@@ -60,6 +100,7 @@ export function LogoField({
   onUpload,
   onChange,
   previewBackground,
+  copy = LOGO_COPY,
   className,
 }: LogoFieldProps) {
   const { t, formatNumber } = useI18n()
@@ -75,7 +116,7 @@ export function LogoField({
     const bytes = new Uint8Array(await file.arrayBuffer())
     const check = checkLogo(bytes)
     if (!check.ok) {
-      setError(t(REJECTION_KEYS[check.reason], { max: formatNumber(MAX_LOGO_BYTES / 1024 / 1024) }))
+      setError(t(REJECTION_KEYS[check.reason], { max: formatNumber(MAX_LOGO_BYTES / 1024) }))
       return
     }
 
@@ -94,7 +135,7 @@ export function LogoField({
           : undefined
       setError(
         reason
-          ? t(REJECTION_KEYS[reason], { max: formatNumber(MAX_LOGO_BYTES / 1024 / 1024) })
+          ? t(REJECTION_KEYS[reason], { max: formatNumber(MAX_LOGO_BYTES / 1024) })
           : t('brandKit.logoErrors.uploadFailed')
       )
     } finally {
@@ -107,17 +148,27 @@ export function LogoField({
 
   return (
     <div className={cn('space-y-2', className)}>
-      <Label htmlFor={inputId}>{t('brandKit.logo')}</Label>
+      <Label htmlFor={inputId}>{t(copy.label)}</Label>
 
       <div className="flex items-center gap-3">
         <span
           aria-hidden
-          className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
+          className={cn(
+            'flex shrink-0 items-center justify-center overflow-hidden rounded-xl border',
+            copy.shape === 'wide' ? 'h-16 w-28' : 'size-16'
+          )}
           style={previewBackground ? { backgroundColor: previewBackground } : undefined}
         >
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="" className="size-full object-contain p-1.5" />
+            <img
+              src={value}
+              alt=""
+              className={cn(
+                'size-full',
+                copy.fit === 'cover' ? 'object-cover' : 'object-contain p-1.5'
+              )}
+            />
           ) : (
             <ImagePlus className="size-5 text-muted-foreground" />
           )}
@@ -152,8 +203,8 @@ export function LogoField({
                   {busy
                     ? t('brandKit.logoUploading')
                     : value
-                      ? t('brandKit.logoReplace')
-                      : t('brandKit.logoUpload')}
+                      ? t(copy.replace)
+                      : t(copy.upload)}
                 </Button>
 
                 {value && (
@@ -173,7 +224,9 @@ export function LogoField({
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{t('brandKit.logoHint')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t(copy.hint, { max: formatNumber(MAX_LOGO_BYTES / 1024) })}
+              </p>
             </>
           ) : (
             <>

@@ -131,6 +131,30 @@ function LogoMark({
 }
 
 /**
+ * The hero/strip image.
+ *
+ * Apple embeds this as `strip.png` and Google as `heroImage`, and both were
+ * already consuming `design.heroImageUrl` — but nothing rendered it, so a
+ * merchant had no way to see what they were shipping. Rendered as a band because
+ * that is where both platforms place it: full width, fixed aspect, cropped.
+ *
+ * `<img>` rather than `next/image` deliberately: the source is a merchant URL on
+ * an arbitrary host, and the optimiser is disabled for this deployment anyway.
+ */
+function HeroStrip({ url, className }: { url: string; className?: string }) {
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={url}
+      alt=""
+      aria-hidden
+      className={cn('h-16 w-full object-cover', className)}
+      loading="lazy"
+    />
+  )
+}
+
+/**
  * A stamp grid.
  *
  * Wraps at six per row, which is what keeps a ten-stamp card readable at card
@@ -324,6 +348,11 @@ export function ApplePassPreview({
           )}
         </header>
 
+        {/* Apple places `strip.png` directly beneath the header. */}
+        {design.heroImageUrl && (
+          <HeroStrip url={design.heroImageUrl} className="mt-3 rounded-lg" />
+        )}
+
         {/* Primary field — the number the customer opens the card to see. */}
         {design.showProgress && design.effectiveProgress !== 'none' && (
           <div className="mt-5">
@@ -482,6 +511,9 @@ export function GooglePassPreview({
           </div>
         </div>
       </div>
+
+      {/* Google places `heroImage` full-bleed under the branded header. */}
+      {design.heroImageUrl && <HeroStrip url={design.heroImageUrl} />}
 
       <div className="space-y-4 p-4">
         {design.showProgress && design.effectiveProgress !== 'none' && (

@@ -46,28 +46,71 @@ junk row into the customer list they had not yet seen.
 
 ## 2. The flow as it is
 
-| Step | Screen | What it asks for | Why it cannot wait |
-| --- | --- | --- | --- |
-| — | `/signup` | Business name, trade, email, password | Creates the business. Already existed; unchanged. |
-| 1 | Your plan | One choice, or "start my trial" | The only decision with money attached. Offered once, with the trial as the default so nobody is blocked by it. |
-| 2 | Your shop | Shop name, address, city | A card has to point somewhere and a geofence needs a centre. Coordinates are explicitly optional. |
-| 3 | Your card | Palette, reward, stamp goal | This is the product. Prefilled from the trade signup already knows, so the merchant confirms rather than composes. |
-| — | Ready | Nothing — QR code, "scan my first customer" | Not a step. The output. |
+Defined in one place — `STEPS` in `app/onboarding/page.tsx` — so the stepper, the
+skip control, the progress percentage and the resume logic cannot disagree about
+what the flow is.
 
-**6 required interactions across 3 blocking screens.**
+| Step | Screen | Required? | What it asks for | Why here |
+| --- | --- | --- | --- | --- |
+| — | `/signup` | — | Business name, trade, email, password | Creates the business. Already existed; unchanged. |
+| 1 | `program` — your loyalty program | **Required** | Stamps or points, and what earns a reward | The one thing the product cannot operate without. Prefilled per trade from `lib/onboarding/presets.ts`. |
+| 2 | `plan` | Optional | One choice, or "start my trial" | The only decision with money attached. Skippable so nobody is blocked; the trial is live either way. |
+| 3 | `shop` | Optional | Shop name, address, city | A card points somewhere and a geofence needs a centre. Coordinates explicitly optional. |
+| 4 | `card` | **Required** | Palette, reward wording, goal — with a live card preview | This is the product. Prefilled from the trade, so the merchant confirms rather than composes. |
+| — | `ready` | — | Nothing — QR code, "scan my first customer" | Not a step. The output. |
+
+Two of the four are optional, and that is marked in `STEPS` rather than implied
+by the UI, so `optional` drives the skip link, the badge and the percentage from
+one field.
 
 ### The reduction
 
 | | Before | After |
 | --- | --- | --- |
-| Blocking screens | 4 | 3 |
+| Blocking screens | 4 | 2 (`program`, `card`) |
 | Required interactions | 11 | 6 |
 | Questions asked twice | 1 | 0 |
 | Steps that write nothing real | 2 (the QR page, the rehearsal) | 0 |
 
-The step count fell by one; the interaction count fell by nearly half. The larger change
-is which steps they are: the flow now covers *plan* and *location*, neither of which it
-previously touched, while asking less overall.
+The interaction count fell by nearly half, and — more importantly — only two
+screens can actually stop a merchant. The flow now also covers *plan* and
+*location*, neither of which it previously touched, while asking less overall.
+
+### The card step is the real designer
+
+`card` renders the same `CardPreview` and the same `resolveCardDesign` the
+dashboard designer and the wallet pass builder use, seeded with the trade's
+preset. A merchant watches their card change as they choose, and what they see is
+what their customer installs — not a marketing approximation of it. See
+[`BRAND_AND_CARD_DESIGN.md`](BRAND_AND_CARD_DESIGN.md).
+
+---
+
+## 2b. Resume
+
+Progress is persisted **server-side** in `business_onboarding.last_step`, written
+by `PATCH /api/v1/onboarding`. Because it is not in `localStorage`, it survives
+refresh, logout, a new login, closing the browser and session expiry — the list
+the brief asks for is satisfied by where the cursor lives rather than by handling
+each case.
+
+The stored step is a **hint, not an instruction**. `resumeStep` recomputes what is
+genuinely outstanding from the account and uses the cursor only to avoid sending
+someone back past work they had already done. Three rules earn their tests:
+
+- **A live trial is not evidence of choosing a plan.** Every signup starts one, so
+  treating it as "plan chosen" skipped the only screen showing prices.
+- **A stale cursor never jumps a missing prerequisite.** Stored `card` with the
+  location since deleted resumes at `shop`.
+- **A cursor written by the previous wizard still works.** `location` was this
+  step's name before it was renamed `shop`; those rows are in the database.
+
+`hasConfiguredLocation` deliberately does not count the placeholder location
+`passimo_provision_business` creates at signup. Treating that as an answer is what
+previously made the location step unreachable for every merchant, so no geofence
+had a centre and no pass carried a place.
+
+Pinned by 30 tests in `tests/unit/onboarding-resume.test.ts`.
 
 ### Mapping to the four required steps
 
