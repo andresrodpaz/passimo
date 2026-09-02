@@ -43,6 +43,30 @@ describe('classifyScan — wallet passes', () => {
     })
   })
 
+  it('reads a signed token written directly after the scheme, dot and all', () => {
+    /*
+     * `passimo:card.eyJ…` is the form a generator produces when it concatenates
+     * the scheme with the token it was handed, and the token already begins
+     * `card.`. The separator class used to be `[:/]?` only, so `card` matched as
+     * the target kind and the token came out as `.eyJ…` — a leading dot that
+     * resolves to nobody. The counter said "no member matches" for a payload
+     * following the documented scheme, which is the worst kind of scanner bug:
+     * the QR is right, the parser is wrong, and the cashier blames the card.
+     */
+    expect(classifyScan('passimo:card.eyJjIjoieCJ9.sig-value')).toEqual({
+      kind: 'card_token',
+      token: 'card.eyJjIjoieCJ9.sig-value',
+    })
+    expect(classifyScan('psm:card.eyJjIjoieCJ9.sig-value')).toEqual({
+      kind: 'card_token',
+      token: 'card.eyJjIjoieCJ9.sig-value',
+    })
+    expect(classifyScan('fidelio:card.eyJjIjoieCJ9.sig-value')).toEqual({
+      kind: 'card_token',
+      token: 'card.eyJjIjoieCJ9.sig-value',
+    })
+  })
+
   it('accepts the custom scheme a pass generator may emit instead of a URL', () => {
     expect(classifyScan(`passimo://customer/${UUID}`)).toEqual({
       kind: 'customer_id',

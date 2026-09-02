@@ -41,7 +41,18 @@ test.describe('gift card shop', () => {
   test('the shop page renders without crashing for an unknown business', async ({ page }) => {
     await page.goto('/gift/definitely-not-a-real-slug')
     await expect(page.locator('main')).toHaveCount(1)
-    await expect(page.getByRole('alert')).toBeVisible()
+
+    /*
+     * Scoped to `main`, because Next renders its own `<div role="alert"
+     * id="__next-route-announcer__">` for screen readers on every navigation.
+     * An unscoped `getByRole('alert')` matched both that and the page's error
+     * panel, and Playwright's strict mode fails on two matches — so this test
+     * passed or failed depending on whether the announcer happened to be in the
+     * DOM when the assertion ran. It passed on mobile and failed on desktop in
+     * the same run, which is the signature of a locator problem rather than a
+     * product one.
+     */
+    await expect(page.locator('main').getByRole('alert')).toBeVisible()
   })
 })
 

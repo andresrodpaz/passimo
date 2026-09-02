@@ -109,15 +109,33 @@ export async function createTenant(
 /**
  * Removes a tenant.
  *
- * Deleting the business cascades to everything scoped to it; deleting the user
- * cascades to sessions and tokens. Both are `on delete cascade` in the schema,
- * which is itself worth exercising — a missing cascade shows up here as a
- * foreign-key error rather than as an orphaned row nobody notices for a year.
+ * Through `passimo_delete_business` rather than `delete from businesses`, and the
+ * difference is not cosmetic: the cascade reaches `loyalty_ledger`, whose
+ * immutability trigger refuses every DELETE, so a plain delete fails for any
+ * tenant a test has recorded an earn against — which is most of them. This
+ * function used to swallow that error, so every such run left its fixture behind
+ * and the leaked workspaces piled up in the platform admin console beside the
+ * demo data. Migration 000023 added the sanctioned route; this uses it and
+ * throws when it fails, because a teardown that quietly does nothing is how the
+ * leak went unnoticed.
+ *
+ * The user is deleted afterwards: `app_users` cascades to sessions and tokens,
+ * and by then nothing references it.
  */
 export async function dropTenant(tenant: TestTenant): Promise<void> {
   const db = getDb()
-  await db.from('businesses').delete().eq('id', tenant.businessId)
-  await db.from('app_users').delete().eq('id', tenant.userId)
+
+  const { error: businessError } = await db.rpc('passimo_delete_business', {
+    p_business_id: tenant.businessId,
+  })
+  if (businessError) {
+    throw new Error(`fixture teardown failed for ${tenant.slug}: ${businessError.message}`)
+  }
+
+  const { error: userError } = await db.from('app_users').delete().eq('id', tenant.userId)
+  if (userError) {
+    throw new Error(`fixture teardown failed for ${tenant.email}: ${userError.message}`)
+  }
 }
 
 /** Enrols a customer through the same function the product uses. */

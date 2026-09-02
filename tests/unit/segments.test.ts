@@ -21,7 +21,7 @@ describe('compileSegment', () => {
       conditions: [{ field: 'email', operator: 'contains', value: "o'brien" }],
     })
     expect(compiled.sql).not.toContain("o'brien")
-    expect(compiled.sql).toContain('p_params ->> 0')
+    expect(compiled.sql).toContain('$1 ->> 0')
     expect(compiled.params).toEqual(["o'brien"])
   })
 
@@ -118,6 +118,64 @@ describe('compileSegment', () => {
     expect(compiled.params).toEqual([['regular']])
   })
 
+  /**
+   * The accessor has to be the *placeholder*, not the PL/pgSQL argument name.
+   *
+   * `passimo_segment_count` and its three siblings bind the parameter array with
+   * `EXECUTE ... USING p_params`, which makes it `$1`. `EXECUTE` does no variable
+   * substitution on the query text, so a predicate saying `p_params` fails with
+   * `column "p_params" does not exist` — and every caller logs that and returns
+   * 0 or [] rather than breaking a campaign screen. The result was segmentation
+   * that matched nobody, in total silence: the preview read 0 against 331
+   * matching customers, and every segmented campaign reached zero recipients.
+   *
+   * No test on the compiler's output *shape* could catch that, because the shape
+   * was fine. Only naming the placeholder can.
+   */
+  it('references the bound parameter as $1, never the PL/pgSQL argument name', () => {
+    const compiled = compileSegment({
+      match: 'all',
+      conditions: [
+        { field: 'visit_count', operator: 'gte', value: 2 },
+        { field: 'rfm_segment', operator: 'in', value: ['champion', 'loyal'] },
+      ],
+    })
+
+    expect(compiled.sql).not.toContain('p_params')
+    expect(compiled.sql).toContain('$1 ->> 0')
+    // A list value takes the `->` path, which had the same defect.
+    expect(compiled.sql).toContain('$1 -> 1')
+  })
+
+  it('emits every value-carrying operator through the $1 accessor', () => {
+    /*
+     * Value-less operators (`is_true`, `is_set`) emit no accessor, which is why
+     * the "VIP" system segment kept working while every other one returned
+     * nobody — and why the failure read as an empty database rather than a broken
+     * query. This walks the operators that *do* carry a value so a future
+     * accessor added to one of them cannot regress alone.
+     */
+    const cases: Array<[string, unknown]> = [
+      ['gte', 2],
+      ['lte', 5],
+      ['eq', 3],
+      ['within_days', 30],
+      ['before_days', 90],
+    ]
+
+    for (const [operator, value] of cases) {
+      const compiled = compileSegment({
+        match: 'all',
+        conditions: [
+          { field: operator === 'within_days' || operator === 'before_days' ? 'last_visit' : 'visit_count', operator, value },
+        ],
+      } as never)
+      expect(compiled.sql, `operator ${operator}`).not.toContain('p_params')
+      expect(compiled.sql, `operator ${operator}`).toContain('$1')
+      expect(compiled.params, `operator ${operator}`).toEqual([value])
+    }
+  })
+
   it('numbers parameters sequentially across the whole tree', () => {
     const compiled = compileSegment({
       match: 'all',
@@ -128,9 +186,9 @@ describe('compileSegment', () => {
       ],
     })
     expect(compiled.params).toEqual([1, 2, 3])
-    expect(compiled.sql).toContain('p_params ->> 0')
-    expect(compiled.sql).toContain('p_params ->> 1')
-    expect(compiled.sql).toContain('p_params ->> 2')
+    expect(compiled.sql).toContain('$1 ->> 0')
+    expect(compiled.sql).toContain('$1 ->> 1')
+    expect(compiled.sql).toContain('$1 ->> 2')
   })
 })
 

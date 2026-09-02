@@ -3,7 +3,11 @@
 Every document here describes what the code **actually does**. Where something is
 partial, planned or dependent on credentials, it says so in those words.
 
-Honest status of the product as a whole: [`../PASSIMO_LAUNCH_STATUS.md`](../PASSIMO_LAUNCH_STATUS.md).
+Honest status of the product as a whole:
+[`../FUNCTIONAL_VERIFICATION_REPORT.md`](../FUNCTIONAL_VERIFICATION_REPORT.md) for
+what has been *executed and verified*, and
+[`../PASSIMO_LAUNCH_STATUS.md`](../PASSIMO_LAUNCH_STATUS.md) for the architecture
+and brand-migration narrative behind it.
 
 ---
 
@@ -15,7 +19,9 @@ Honest status of the product as a whole: [`../PASSIMO_LAUNCH_STATUS.md`](../PASS
 | Understand how the pieces fit | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Deploy it | [`RAILWAY.md`](RAILWAY.md), then [`INFRASTRUCTURE.md`](INFRASTRUCTURE.md) |
 | Fix something that is broken | [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) |
-| Know what is not finished | [`../PASSIMO_LAUNCH_STATUS.md`](../PASSIMO_LAUNCH_STATUS.md) |
+| Know what is not finished | [`../FUNCTIONAL_VERIFICATION_REPORT.md`](../FUNCTIONAL_VERIFICATION_REPORT.md) |
+| Log in and try it | [`../DEMO_CREDENTIALS.md`](../DEMO_CREDENTIALS.md), then [`DEMO_TESTING.md`](DEMO_TESTING.md) |
+| Check whether the database is healthy | [`DATABASE_VERIFICATION.md`](DATABASE_VERIFICATION.md) |
 
 ---
 
@@ -54,6 +60,18 @@ means your role cannot do this, `402` means your plan cannot.
 | [`INTERNATIONALIZATION.md`](INTERNATIONALIZATION.md) | How "never mix languages" is enforced by the type system rather than intended |
 | [`API.md`](API.md) | REST reference, authentication, webhooks, error envelope |
 | [`DEMO_ENVIRONMENT.md`](DEMO_ENVIRONMENT.md) | `pnpm seed:demo`, the accounts it creates, what each demonstrates |
+
+## Verification
+
+Three documents that exist so a claim about this product can be checked rather
+than believed.
+
+| Document | Covers |
+| --- | --- |
+| [`../DEMO_CREDENTIALS.md`](../DEMO_CREDENTIALS.md) | Sign-in details for every plan, a test script per plan, and the feature matrix as *verified against the running API* |
+| [`DEMO_TESTING.md`](DEMO_TESTING.md) | A practical walkthrough: exercise every feature by hand, in the order a merchant meets them |
+| [`DATABASE_VERIFICATION.md`](DATABASE_VERIFICATION.md) | The 15-file diagnostic suite (`pnpm db:verify`), what each file answers, and how to reset, seed and inspect |
+| [`../FUNCTIONAL_VERIFICATION_REPORT.md`](../FUNCTIONAL_VERIFICATION_REPORT.md) | What was executed, what it returned, what was fixed, and what remains — per area, with completion percentages |
 
 ## Engineering
 

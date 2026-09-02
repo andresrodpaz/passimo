@@ -32,6 +32,13 @@ export const GET = defineRoute(
 
     return {
       plan: summary.plan,
+      /*
+       * The raw column, so a client can tell a live trial from a lapsed
+       * workspace. `plan` normalises `trial` to `lapsed` — see the type in
+       * `lib/billing/entitlements.ts` — and reporting only that reads as "this
+       * account has no subscription" for somebody on day two of their trial.
+       */
+      stored_plan: summary.storedPlan,
       effective_plan: summary.effectivePlan,
       trial: summary.trial,
       subscription: summary.subscription,

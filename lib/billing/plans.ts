@@ -157,14 +157,30 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyPrice: 5,
     annualPrice: 50,
     features: ['custom_branding', 'wallet_proximity'],
+    /*
+     * `campaigns_per_month` and `proximity_campaigns` are 0, not 2 and 1.
+     *
+     * They used to be 2 and 1, which made them numbers nothing could ever
+     * consume: `campaigns.create` and `wallet.campaigns.create` are gated on the
+     * `campaigns` and `proximity_campaigns` *features*, and Starter has neither,
+     * so the quota was refused with 402 long before the counter was read. The
+     * visible cost was on the billing screen, which renders a meter per limit
+     * key and therefore showed a Starter merchant "Campaigns 0 / 2" beside a
+     * Campaigns button that answers "available from Growth". Two screens, two
+     * answers, and the wrong one was the more encouraging.
+     *
+     * Zero is also what `lowestPlanWithLimit` needs to be told: asked for a plan
+     * that allows one campaign a month it now returns Growth, which is the plan
+     * that actually does.
+     */
     limits: {
       customers: 500,
       locations: 1,
       team_members: 2,
       messages_per_month: 500,
       ai_actions_per_month: 0,
-      campaigns_per_month: 2,
-      proximity_campaigns: 1,
+      campaigns_per_month: 0,
+      proximity_campaigns: 0,
       automation_rules: 0,
     },
     highlightKeys: [

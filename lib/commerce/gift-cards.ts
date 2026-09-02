@@ -1,6 +1,6 @@
 import 'server-only'
 import { getDb } from '@/lib/db'
-import { conflict, notFound, unprocessable } from '@/lib/errors'
+import { conflictBecause, notFound, unprocessable } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { num } from '@/lib/domain/types'
 import { enqueue } from '@/lib/jobs/queue'
@@ -297,11 +297,14 @@ export async function redeemGiftCard(input: RedeemGiftCardInput): Promise<Redeem
 function translateRedeemError(error: { message: string; hint?: string | null; code?: string | null }) {
   switch (error.hint) {
     case 'gift_card_inactive':
-      return conflict('This gift card has already been used up or cancelled.')
+      return conflictBecause(
+        'gift_card_inactive',
+        'This gift card has already been used up or cancelled.'
+      )
     case 'gift_card_expired':
-      return conflict('This gift card has expired.')
+      return conflictBecause('gift_card_expired', 'This gift card has expired.')
     case 'gift_card_empty':
-      return conflict('This gift card has no balance left.')
+      return conflictBecause('gift_card_empty', 'This gift card has no balance left.')
     default:
       if (error.code === 'P0002' || /invalid gift card/i.test(error.message)) {
         return notFound('Gift card')

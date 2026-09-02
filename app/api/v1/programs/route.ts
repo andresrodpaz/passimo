@@ -4,6 +4,7 @@ import { programSchema, ruleSchema } from '@/lib/api/schemas'
 import { getDb } from '@/lib/db'
 import { unprocessable } from '@/lib/errors'
 import { invalidateProgramConfig } from '@/lib/loyalty/engine'
+import { syncDefaultEarningRules } from '@/lib/loyalty/default-rules'
 import { recordAudit } from '@/lib/audit'
 import { num } from '@/lib/domain/types'
 
@@ -127,6 +128,18 @@ export const POST = defineRoute(
       .single()
 
     if (error) throw unprocessable(error.message)
+
+    /*
+     * A program with no earning rules awards nothing. This route used to create
+     * exactly that — the merchant got a program, a goal and a reward, and every
+     * scan credited zero. The rules follow the type; see
+     * `lib/loyalty/default-rules.ts` for why they have to be derived rather than
+     * assumed.
+     */
+    await syncDefaultEarningRules(business.businessId, data.id as string, body.type, {
+      cashbackPercent: body.cashbackPercent ?? null,
+    })
+
     invalidateProgramConfig(business.businessId)
 
     await recordAudit({
@@ -197,6 +210,23 @@ export const PATCH = defineRoute(
       .eq('id', body.id)
       .eq('business_id', business.businessId)
     if (error) throw unprocessable(error.message)
+
+    /*
+     * Changing the type has to change how earning works, or it changes nothing
+     * that matters.
+     *
+     * This is the call onboarding makes: it PATCHes `type: 'points'` and
+     * `goalAmount: 500` onto the stamps program that provisioning created, and
+     * before this line the provisioned `visit → fixed → 1` rule survived — so the
+     * gym owner's 500-point card earned one point a visit. `syncDefaultEarningRules`
+     * rewrites only the untouched provisioned rule and never a rule the merchant
+     * has edited or that has already fired.
+     */
+    if (body.type !== undefined) {
+      await syncDefaultEarningRules(business.businessId, body.id, body.type, {
+        cashbackPercent: body.cashbackPercent ?? null,
+      })
+    }
 
     invalidateProgramConfig(business.businessId)
     await recordAudit({

@@ -50,6 +50,50 @@ const CODE_KEYS: Record<string, TranslationKey> = {
 }
 
 /**
+ * Business-rule refusals, keyed on `details.reason`.
+ *
+ * `unprocessable` and `conflict` are where the *prose* carries the meaning:
+ * "Not enough balance" and "This reward is out of stock" share a code, so the
+ * code alone cannot produce a sentence and the server's English one was reaching
+ * Spanish screens. `lib/errors.ts` now attaches a stable reason to the refusals
+ * staff meet at the counter, and these are the words for them.
+ *
+ * Consulted *before* `CODE_KEYS`, because a reason is strictly more specific than
+ * a code: "This gift card has expired" beats "That conflicts with something
+ * else" every time.
+ *
+ * Deliberately not exhaustive. A reason with no entry falls through to the code,
+ * and then to the server's sentence — the long tail of validation refusals on
+ * configuration screens is read once, by an owner, at their own pace, and is not
+ * worth a dictionary entry each.
+ */
+const REASON_KEYS: Record<string, TranslationKey> = {
+  insufficient_balance: 'errors.reason.insufficient_balance',
+  out_of_stock: 'errors.reason.out_of_stock',
+  tier_too_low: 'errors.reason.tier_too_low',
+  per_customer_limit: 'errors.reason.per_customer_limit',
+  reward_unavailable: 'errors.reason.reward_unavailable',
+  reward_not_started: 'errors.reason.reward_not_started',
+  no_active_program: 'errors.reason.no_active_program',
+  customer_blocked: 'errors.reason.customer_blocked',
+  customer_anonymized: 'errors.reason.customer_anonymized',
+  grant_not_found: 'errors.reason.grant_not_found',
+  grant_already_used: 'errors.reason.grant_already_used',
+  grant_expired: 'errors.reason.grant_expired',
+  grant_cancelled: 'errors.reason.grant_cancelled',
+  gift_card_inactive: 'errors.reason.gift_card_inactive',
+  gift_card_expired: 'errors.reason.gift_card_expired',
+  gift_card_empty: 'errors.reason.gift_card_empty',
+}
+
+function reasonOf(error: ApiError): string | null {
+  const details = error.details
+  if (details === null || typeof details !== 'object') return null
+  const reason = (details as { reason?: unknown }).reason
+  return typeof reason === 'string' ? reason : null
+}
+
+/**
  * Returns a translated sentence for an error, or `null` when there is nothing to
  * say — so a caller can decide between a toast and silence.
  */
@@ -60,6 +104,9 @@ export function apiErrorMessage(error: unknown, t: Translator): string | null {
   }
 
   if (error.code === 'payment_required') return upgradeMessage(error, t)
+
+  const reason = reasonOf(error)
+  if (reason && REASON_KEYS[reason]) return t(REASON_KEYS[reason])
 
   const key = CODE_KEYS[error.code]
   if (key) return t(key)

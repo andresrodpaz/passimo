@@ -81,8 +81,21 @@ export class UpgradeRequiredError extends AppError {
 
 export type Entitlements = {
   businessId: string
-  /** The tier being billed, straight from the `businesses` row. */
+  /**
+   * The tier this workspace falls back to — **not** the raw column value.
+   *
+   * The docstring used to say "straight from the `businesses` row", and it was
+   * wrong in the one case that matters: a trialling workspace stores `trial`,
+   * which is a lifecycle state rather than a tier, so `normalizePlanId` returns
+   * null and this becomes `lapsed`. Read on its own it says a live trial has no
+   * subscription, which is how the admin console came to label every trial
+   * "Inactive". `effectivePlan` is what gates and what every screen should show;
+   * `storedPlan` below is the column, unmodified, for anything that needs to tell
+   * "trialling" from "trial ended".
+   */
   plan: PlanId
+  /** The raw `businesses.plan` value, including `trial`. */
+  storedPlan: string | null
   /** The tier whose features actually apply right now (a live trial gets more). */
   effectivePlan: PlanId
   planDefinition: Plan
@@ -190,6 +203,7 @@ export function resolveEntitlements(
   return {
     businessId,
     plan,
+    storedPlan: storedPlan ?? null,
     effectivePlan,
     planDefinition: definition,
     limits: definition.limits,
@@ -208,6 +222,71 @@ export function resolveEntitlements(
       delinquent,
     },
     referralCredit: Number(row?.referral_credit ?? 0) || 0,
+  }
+}
+
+/**
+ * What tier a stored `businesses.plan` value actually means.
+ *
+ * Exists because `normalizePlanId` deliberately does not know about `'trial'`.
+ * `'trial'` is a *lifecycle state* the column is allowed to hold, not a tier in
+ * the catalogue — there is nothing to charge for it and nothing to gate on it —
+ * so `normalizePlanId('trial')` returns null, and every caller that wrote
+ * `normalizePlanId(row.plan) ?? 'lapsed'` therefore labelled every trialling
+ * workspace **Inactive**. In the admin console that meant the plan breakdown
+ * counted live trials as churn, the workspace list showed "Inactive" in the same
+ * row as a future `trial_ends_at`, and the business drawer overwrote the stored
+ * `plan` with `lapsed` on the way out.
+ *
+ * The fix is not to teach `normalizePlanId` a fifth tier; it is to make the one
+ * place that already resolves this correctly — `resolveEntitlements` — reachable
+ * from a plain row. Reads that need a label call this; reads that need gates
+ * still call `getEntitlements`.
+ */
+export type StoredPlanDescription = {
+  /** The tier being billed. `lapsed` while a trial is running or has ended. */
+  plan: PlanId
+  /** The tier whose features apply right now. A live trial resolves to Pro. */
+  effectivePlan: PlanId
+  /** True while the trial window is open. */
+  onTrial: boolean
+  /** True when there is no live entitlement at all: no trial, no subscription. */
+  lapsed: boolean
+  /** The tier name to show in a table cell. */
+  label: string
+}
+
+export function describeStoredPlan(
+  row: {
+    plan?: string | null
+    plan_interval?: string | null
+    trial_ends_at?: string | null
+    subscription_status?: string | null
+  } | null,
+  now: Date = new Date()
+): StoredPlanDescription {
+  const resolved = resolveEntitlements(
+    '',
+    {
+      id: '',
+      plan: row?.plan ?? null,
+      plan_interval: row?.plan_interval ?? null,
+      trial_ends_at: row?.trial_ends_at ?? null,
+      subscription_status: row?.subscription_status ?? null,
+      subscription_current_period_end: null,
+      cancel_at_period_end: null,
+      stripe_subscription_id: null,
+      referral_credit: null,
+    },
+    now
+  )
+
+  return {
+    plan: resolved.plan,
+    effectivePlan: resolved.effectivePlan,
+    onTrial: resolved.trial.active,
+    lapsed: resolved.lapsed,
+    label: PLANS[resolved.effectivePlan].name,
   }
 }
 

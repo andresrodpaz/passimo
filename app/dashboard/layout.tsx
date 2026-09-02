@@ -118,17 +118,26 @@ const NAV_GROUPS: { labelKey: TranslationKey; items: NavItem[] }[] = [
   {
     labelKey: 'dashboard.nav.grow',
     items: [
+      /*
+       * These two carry their `feature` for the same reason gift cards and
+       * memberships do. Reading a campaign list is not gated — a downgrade must
+       * never hide data — but *creating* one is, so leaving the lock off meant a
+       * Starter merchant met the paywall only after choosing a template and
+       * writing the copy. The lock moves that answer to before the work.
+       */
       {
         href: '/dashboard/campaigns',
         icon: Megaphone,
         labelKey: 'dashboard.nav.campaigns',
         permission: 'campaigns:read',
+        feature: 'campaigns',
       },
       {
         href: '/dashboard/automations',
         icon: Zap,
         labelKey: 'dashboard.nav.automations',
         permission: 'campaigns:read',
+        feature: 'automations',
       },
       {
         href: '/dashboard/growth',

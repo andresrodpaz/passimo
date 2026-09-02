@@ -642,16 +642,30 @@ describe('contrast is implemented exactly once', () => {
 
   const files = SEARCHED.flatMap(sourceFiles)
 
-  it('finds the luminance coefficients in one file only', () => {
-    // 0.0722 is the blue coefficient from WCAG 2.1. Anything computing it again
-    // is a second opinion on legibility.
-    const carriers = files.filter((file) => {
-      const source = readFileSync(join(ROOT, file), 'utf8')
-      return source.includes('0.0722') || source.includes('0.7152')
-    })
+  /*
+   * A generous timeout, because this is the one test in the suite whose cost is
+   * disk rather than CPU: it opens every `.ts` and `.tsx` file under `app`,
+   * `components` and `lib`. On a warm cache that is ~130 ms; on a cold one, or
+   * behind a Windows virus scanner reading several hundred files for the first
+   * time, it has been seen to pass 5 s and fail as a timeout while the assertion
+   * itself was fine. A structural check that fails intermittently gets muted, and
+   * a muted check is worse than none — the three-copies bug it exists to catch is
+   * exactly the kind that reappears.
+   */
+  it(
+    'finds the luminance coefficients in one file only',
+    () => {
+      // 0.0722 is the blue coefficient from WCAG 2.1. Anything computing it again
+      // is a second opinion on legibility.
+      const carriers = files.filter((file) => {
+        const source = readFileSync(join(ROOT, file), 'utf8')
+        return source.includes('0.0722') || source.includes('0.7152')
+      })
 
-    expect(carriers, `luminance re-implemented in: ${carriers.join(', ')}`).toEqual([CANONICAL])
-  })
+      expect(carriers, `luminance re-implemented in: ${carriers.join(', ')}`).toEqual([CANONICAL])
+    },
+    30_000
+  )
 
   it('scanned a plausible number of files, so a broken walk cannot pass silently', () => {
     // Without this, a bad path would make the check above vacuously true.

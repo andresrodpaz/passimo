@@ -7,18 +7,58 @@ import {
 
 /**
  * Compiles a segment definition into a SQL predicate plus a JSON parameter
- * array, executed by the `passimo_run_segment` function.
+ * array, executed by the `passimo_segment_*` functions.
  *
  * Safety model — there is no path from merchant input into SQL text:
  *   1. Column names come from the `SEGMENT_FIELDS` allow-list, never from input.
  *   2. Operators are matched against a closed set; anything unknown compiles to
  *      a constant.
- *   3. Every value is emitted as a `p_params -> N` JSON accessor with an
- *      explicit cast, so values are data, never syntax.
+ *   3. Every value is emitted as a `$1 -> N` JSON accessor with an explicit
+ *      cast, so values are data, never syntax.
  *
  * The compiled predicate is deterministic, which makes it straightforward to
  * unit-test the exact SQL a definition produces.
+ *
+ * ## Why the accessor is `$1` and not `p_params`
+ *
+ * This was a real, total, silent failure of the segmentation feature.
+ *
+ * The four SQL functions in migration `000010` take the parameter array as a
+ * PL/pgSQL argument called `p_params` and hand it to the predicate with
+ * `EXECUTE ... USING p_params`. `USING` binds it as **`$1`**. `EXECUTE` performs
+ * no variable substitution on the query text — the string goes to the SQL engine,
+ * which has never heard of a PL/pgSQL local — so a predicate that says `p_params`
+ * fails with `column "p_params" does not exist`.
+ *
+ * The compiler emitted `p_params`, matching the argument name rather than the
+ * placeholder. So:
+ *
+ *   - every condition carrying a *value* produced a predicate that errored;
+ *   - `resolveSegmentDefinition`'s callers log and return `0` / `[]` on error,
+ *     because a failed segment must never break a campaign screen;
+ *   - so every such segment matched **nobody**, with no error surfaced.
+ *
+ * What that looked like from the outside: the preview counted 0 against a
+ * database with 331 matching customers, "At risk", "Lost", "New this month" and
+ * "Reward ready" all read 0 on the dashboard, and every segmented campaign
+ * reported a reach of zero. The only segments that worked were the ones built
+ * from value-less operators — `is_true`, `is_set` — because those emit no
+ * accessor at all, which is precisely why "VIP" looked fine and made the rest
+ * look like an empty database rather than a broken query.
+ *
+ * Fixed here rather than in SQL because the functions are already correct: they
+ * bind one parameter and the placeholder for the first bound parameter is `$1`.
+ * Changing four applied migrations to accommodate a wrong accessor would be
+ * fixing the wrong end, and applied migrations are checksummed.
  */
+
+/**
+ * The placeholder the parameter array arrives under.
+ *
+ * Named rather than inlined so the reason lives in one place, and so a test can
+ * assert the emitted SQL contains no reference to the PL/pgSQL argument name.
+ */
+const PARAMS = '$1'
 
 export type CompiledSegment = {
   /** SQL fragment valid in a WHERE clause against `customers c`. */
@@ -36,9 +76,9 @@ class ParamBag {
     const index = this.values.length
     this.values.push(value)
     if (cast === 'text[]') {
-      return `(select coalesce(array_agg(v), array[]::text[]) from jsonb_array_elements_text(p_params -> ${index}) as v)`
+      return `(select coalesce(array_agg(v), array[]::text[]) from jsonb_array_elements_text(${PARAMS} -> ${index}) as v)`
     }
-    return `((p_params ->> ${index})::${cast})`
+    return `((${PARAMS} ->> ${index})::${cast})`
   }
 }
 

@@ -1136,6 +1136,9 @@ export const es: Dictionary = {
     needsTerms: 'Acepta las condiciones para unirte.',
     failed: 'No hemos podido darte de alta. Inténtalo otra vez.',
     notFound: 'Este programa de fidelización no existe.',
+    notFoundBody:
+      'Puede que el negocio haya cerrado su programa de fidelización o que la dirección esté mal escrita. Pide un QR nuevo en el mostrador.',
+    notFoundAction: 'Ir a Passimo',
     loadFailed: 'No hemos podido cargar esta página. Inténtalo otra vez.',
     done: '¡Ya estás dentro!',
     doneBody: 'Añade la tarjeta a tu móvil para no perderla nunca.',
@@ -1727,6 +1730,8 @@ export const es: Dictionary = {
       impersonate: 'Ver como el negocio',
       changePlan: 'Cambiar plan',
       empty: 'Ningún negocio coincide.',
+      onTrial: 'prueba',
+      trialEnds: 'La prueba termina el {date}',
     },
     planChange: {
       title: 'Cambiar plan',
@@ -2977,6 +2982,11 @@ export const es: Dictionary = {
   },
 
   errors: {
+    notFoundPageTitle: 'No hemos encontrado esa página',
+    notFoundPageBody:
+      'Puede que el enlace esté caducado o que la página se haya movido. No se ha perdido nada: tus datos siguen donde los dejaste.',
+    notFoundHome: 'Volver al inicio',
+    notFoundDashboard: 'Ir a mi panel',
     notFound: 'No encontrado',
     notFoundBody: 'La página que buscabas no está aquí.',
     forbidden: 'No tienes acceso a esto',
@@ -3007,6 +3017,33 @@ export const es: Dictionary = {
       upgradeLimit: 'Tu plan incluye {allowed} {limit}. Estás usando {used}.',
       upgradeLapsed:
         'Tu suscripción está inactiva. Reactívala para hacer eso: no se ha borrado nada.',
+    },
+
+    /**
+     * Rechazos por reglas de negocio, según el motivo que envía el servidor.
+     *
+     * `errors.api` cubre el transporte: sesión caducada, rol incorrecto, demasiadas
+     * peticiones. Estos cubren el mostrador. Cada uno lo lee alguien del equipo con
+     * un cliente delante, y por eso dicen qué hacer a continuación y no solo qué ha
+     * fallado.
+     */
+    reason: {
+      insufficient_balance: 'Todavía no hay saldo suficiente para ese premio.',
+      out_of_stock: 'Ese premio está agotado.',
+      tier_too_low: 'El nivel de este cliente aún no alcanza ese premio.',
+      per_customer_limit: 'Este cliente ya ha canjeado ese premio el máximo de veces.',
+      reward_unavailable: 'Ese premio ya no está disponible.',
+      reward_not_started: 'Ese premio todavía no ha empezado.',
+      no_active_program: 'Este negocio no tiene ningún programa activo. Crea uno en Premios.',
+      customer_blocked: 'Este cliente está bloqueado. Desbloquéalo desde su perfil primero.',
+      customer_anonymized: 'Los datos de este cliente se han borrado y no se pueden usar.',
+      grant_not_found: 'Ese código no existe. Revisa los dígitos e inténtalo otra vez.',
+      grant_already_used: 'Ese premio ya se ha usado.',
+      grant_expired: 'Ese premio ha caducado.',
+      grant_cancelled: 'Ese premio se canceló.',
+      gift_card_inactive: 'Esa tarjeta regalo se ha agotado o se ha cancelado.',
+      gift_card_expired: 'Esa tarjeta regalo ha caducado.',
+      gift_card_empty: 'Esa tarjeta regalo no tiene saldo.',
     },
   },
 }

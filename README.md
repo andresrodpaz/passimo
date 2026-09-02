@@ -14,7 +14,7 @@ pnpm install
 cp .env.example .env.local     # fill in the "Required" block
 pnpm db:up                     # PostgreSQL 16 in Docker
 pnpm db:migrate                # apply the schema to an empty database
-pnpm seed:demo                 # optional: four demo merchants and an admin
+pnpm seed:demo                 # six demo merchants and a platform admin
 pnpm dev
 ```
 
@@ -31,9 +31,28 @@ saved segments and eight always-on automations.
 
 Or run `pnpm seed:demo` and sign in as `starter@demo.com` / `growth@demo.com` /
 `pro@demo.com` / `business@demo.com` — one account per paid plan, each with real
-customers, campaigns, geofences and analytics — plus `admin@passimo.demo` for the
-platform console. The password is `DEMO_PASSWORD` (default `PassimoDemo2026!`).
-See [`docs/DEMO_ENVIRONMENT.md`](docs/DEMO_ENVIRONMENT.md).
+customers, campaigns, geofences and analytics — plus `trial@demo.com` and
+`lapsed@demo.com` for the two lifecycle states no paid plan can reach, and
+`admin@passimo.demo` for the platform console. The password is `DEMO_PASSWORD`
+(default `PassimoDemo2026!`).
+
+Every one of those credentials has been used to sign in against a production
+build, and every workspace exercised end to end:
+[`DEMO_CREDENTIALS.md`](DEMO_CREDENTIALS.md) has the per-plan test scripts and the
+verified feature matrix, [`docs/DEMO_TESTING.md`](docs/DEMO_TESTING.md) is the
+hands-on walkthrough, and
+[`FUNCTIONAL_VERIFICATION_REPORT.md`](FUNCTIONAL_VERIFICATION_REPORT.md) says what
+was executed, what it returned and what is still missing.
+
+### Verifying it yourself
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test && pnpm test:integration
+pnpm db:verify              # 15 diagnostic files against the live database
+pnpm build && pnpm start &
+pnpm verify:functional      # 939 checks over HTTP, every plan
+pnpm test:e2e               # 158 browser tests, desktop and mobile
+```
 
 ### The only variables you need to boot
 
@@ -264,6 +283,10 @@ Playwright on both viewports.
 - [`docs/STORE_EXPERIENCE.md`](docs/STORE_EXPERIENCE.md) — the counter scanner, browser support, offline behaviour
 - [`docs/SUBSCRIPTIONS.md`](docs/SUBSCRIPTIONS.md) — the plan catalogue and how feature gating works
 - [`docs/INTERNATIONALIZATION.md`](docs/INTERNATIONALIZATION.md) — how "never mix languages" is enforced rather than intended
+- [`DEMO_CREDENTIALS.md`](DEMO_CREDENTIALS.md) — sign-in details per plan, a test script for each, the verified feature matrix
+- [`docs/DEMO_TESTING.md`](docs/DEMO_TESTING.md) — exercise every feature by hand, in the order a merchant meets them
+- [`docs/DATABASE_VERIFICATION.md`](docs/DATABASE_VERIFICATION.md) — the diagnostic query suite, and how to reset, seed and inspect
+- [`FUNCTIONAL_VERIFICATION_REPORT.md`](FUNCTIONAL_VERIFICATION_REPORT.md) — what was executed, what was fixed, what remains
 - [`docs/DEMO_ENVIRONMENT.md`](docs/DEMO_ENVIRONMENT.md) — `pnpm seed:demo`, the accounts it creates, what they demonstrate
 - [`docs/API.md`](docs/API.md) — REST reference, auth, webhooks, errors
 - [`docs/SECURITY.md`](docs/SECURITY.md) — threat model, GDPR posture

@@ -299,7 +299,28 @@ const ruleFields = {
   templateKey: z.string().max(60).nullable().optional(),
 }
 
-export const createRuleSchema = z.object({ businessId: uuid, ...ruleFields })
+/**
+ * `actions` is **required on create** and optional on update.
+ *
+ * With it optional on both, `POST /api/v1/wallet/rules` accepted a body carrying
+ * nothing but a name and produced an active rule with `conditions: {"all": []}`
+ * and `actions: []` — a rule that matches everything, does nothing, and still
+ * counts against the plan's `automation_rules` quota. It appears on the merchant's
+ * rules screen looking like a rule. `scripts/db/011_wallet.sql` flags exactly this
+ * shape, which is how it was found.
+ *
+ * Empty `conditions` stays legal: "always fire" is a rule a merchant might
+ * genuinely want (a welcome notification on every visit). An empty *action* list
+ * is not a rule at all.
+ *
+ * Optional on update because a PATCH may legitimately change only the name or the
+ * priority, and the store merges rather than replaces.
+ */
+export const createRuleSchema = z.object({
+  businessId: uuid,
+  ...ruleFields,
+  actions: z.array(ruleActionSchema).min(1).max(10),
+})
 
 export const updateRuleSchema = z.object({
   businessId: uuid,

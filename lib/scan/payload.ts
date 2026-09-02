@@ -36,6 +36,13 @@ export type CodeKind = 'reward' | 'gift_card' | 'referral'
 const ALL_CODE_KINDS: CodeKind[] = ['reward', 'gift_card', 'referral']
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/**
+ * A signed capability token: `<purpose>.<body>.<signature>`.
+ *
+ * Named because it is matched in two places — bare, and after a custom scheme
+ * has been stripped — and the two must agree about what a token looks like.
+ */
+const SIGNED_TOKEN_RE = /^card\.[\w-]+\.[\w-]+$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 /** The alphabet `randomCode` uses — no I/O/0/1, so codes survive being read aloud. */
 const HUMAN_CODE_RE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789-]{6,24}$/
@@ -80,16 +87,34 @@ export function classifyScan(raw: string): ScanPayload {
    * cannot be re-issued by renaming a company. Accepting both costs one
    * alternation; dropping the old one would silently stop recognising customers
    * who enrolled before the rename.
+   *
+   * The scheme is stripped first and the remainder classified separately, rather
+   * than matched by one regex, because `card` is ambiguous after the scheme. In
+   * `passimo:card/<token>` it is
+   * a *target selector*; in `passimo:card.<body>.<signature>` it is the purpose
+   * prefix of the signed token itself. A single pattern treating `card` as a
+   * selector turned the second form into a token of `.<body>.<signature>` — a
+   * leading dot that resolves to nobody. The counter answered "no member
+   * matches" for a payload that follows the documented scheme exactly, which is
+   * the worst shape of scanner bug: the QR is right, the parser is wrong, and
+   * the cashier blames the customer's card.
    */
-  const scheme = /^(?:passimo|psm|fidelio|fid):(?:\/\/)?(customer|card|c)\/?[:/]?(.+)$/i.exec(value)
-  if (scheme) {
-    const target = clean(scheme[2]!)
-    if (UUID_RE.test(target)) return { kind: 'customer_id', customerId: target.toLowerCase() }
-    return { kind: 'card_token', token: target }
+  const SCHEME = /^(?:passimo|psm|fidelio|fid):(?:\/\/)?/i
+  if (SCHEME.test(value)) {
+    const rest = clean(value.replace(SCHEME, ''))
+
+    // A signed capability token carries its own purpose prefix. Check it before
+    // reading `card` as a selector.
+    if (SIGNED_TOKEN_RE.test(rest)) return { kind: 'card_token', token: rest }
+
+    const target = /^(?:customer|card|c)[:/]?(.+)$/i.exec(rest)
+    const value2 = clean(target?.[1] ?? rest)
+    if (UUID_RE.test(value2)) return { kind: 'customer_id', customerId: value2.toLowerCase() }
+    if (value2) return { kind: 'card_token', token: value2 }
   }
 
   // 3. Signed capability tokens are `<purpose>.<body>.<signature>`.
-  if (/^card\.[\w-]+\.[\w-]+$/.test(value)) return { kind: 'card_token', token: value }
+  if (SIGNED_TOKEN_RE.test(value)) return { kind: 'card_token', token: value }
 
   // 4. Wallet barcodes: the bare customer id.
   if (UUID_RE.test(value)) return { kind: 'customer_id', customerId: value.toLowerCase() }

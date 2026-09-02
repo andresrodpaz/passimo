@@ -103,7 +103,20 @@ type Infer<T> = T extends z.ZodTypeAny ? z.infer<T> : undefined
  *   4. schema validation          (body / query / params)
  *   5. business + permission      (needs parsed input to know the target)
  *   6. plan entitlement           (403 before 402: role first, then plan)
- *   7. handler
+ *   7. deployment capability      (402 before 503: plan first, then credentials)
+ *   8. handler
+ *
+ * Step 7 used to be step 0, which was wrong twice over. A stranger with no
+ * session could POST to `/api/v1/ai` and learn from the 503 whether this
+ * deployment holds an Anthropic key — and the same for Stripe on the checkout
+ * routes — which is deployment inventory handed to an unauthenticated caller.
+ * Worse for the product: a Starter merchant who clicked an AI button was told
+ * "AI features is not configured on this deployment", so the one refusal that
+ * should have sold them an upgrade instead told them the product was broken.
+ * Checking credentials last means anonymous callers get 401, merchants without
+ * the tier get 402 naming the tier, and only an entitled merchant on an
+ * unconfigured deployment ever sees 503 — which is the only audience for whom
+ * that sentence is true.
  *
  * The handler may return a `Response` (raw) or any JSON-serialisable value.
  */
@@ -127,10 +140,6 @@ export function defineRoute<
     let extraHeaders: Record<string, string> = {}
 
     try {
-      if (options.requires && !options.requires()) {
-        throw notConfigured(options.requiresLabel ?? options.name)
-      }
-
       const authMode: AuthMode = options.auth ?? 'required'
 
       if (authMode === 'cron') {
@@ -206,7 +215,12 @@ export function defineRoute<
         }
       }
 
-      // 6. Handler -----------------------------------------------------------
+      // 7. Deployment capability ---------------------------------------------
+      if (options.requires && !options.requires()) {
+        throw notConfigured(options.requiresLabel ?? options.name)
+      }
+
+      // 8. Handler -----------------------------------------------------------
       const result = await handler({
         request,
         body: body as Infer<TBodySchema>,

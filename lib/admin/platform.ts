@@ -2,7 +2,8 @@ import 'server-only'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { num } from '@/lib/domain/types'
-import { PLANS, TRIAL_EXPIRED_PLAN, normalizePlanId, type PlanId } from '@/lib/billing/plans'
+import { PLANS, TRIAL_EXPIRED_PLAN, type PlanId } from '@/lib/billing/plans'
+import { describeStoredPlan } from '@/lib/billing/entitlements'
 import { capabilityReport } from '@/lib/env'
 import { walletService } from '@/lib/wallet/service'
 
@@ -48,7 +49,13 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
 
   const [overviewResult, planResult] = await Promise.allSettled([
     admin.rpc('passimo_platform_overview'),
-    admin.from('businesses').select('plan, subscription_status, plan_interval').limit(20_000),
+    admin
+      .from('businesses')
+      // `trial_ends_at` is not decoration: without it a live trial is
+      // indistinguishable from a lapsed workspace, which is how every trial
+      // ended up in the Inactive row of the plan breakdown.
+      .select('plan, subscription_status, plan_interval, trial_ends_at')
+      .limit(20_000),
   ])
 
   const overviewRows =
@@ -62,15 +69,28 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   }
 
   const planBreakdown = new Map<PlanId, { count: number; mrrCents: number }>()
+  let trialingCount = 0
   if (planResult.status === 'fulfilled') {
     for (const business of planResult.value.data ?? []) {
-      const plan = normalizePlanId(business.plan) ?? 'lapsed'
+      const described = describeStoredPlan(business)
+      /*
+       * Counted under the tier whose features the workspace is actually using,
+       * so a trial appears next to the plan it is evaluating rather than in the
+       * Inactive row. Previously `normalizePlanId(plan) ?? 'lapsed'` put every
+       * live trial in Inactive — the number a founder reads as churn.
+       */
+      const plan = described.effectivePlan
       const entry = planBreakdown.get(plan) ?? { count: 0, mrrCents: 0 }
       entry.count += 1
-      // Only paying subscriptions contribute. Counting a lapsed or trialling
-      // workspace as revenue is the fastest way to build a dashboard nobody
-      // trusts.
-      if (business.subscription_status === 'active' || business.subscription_status === 'trialing') {
+      if (described.onTrial) trialingCount += 1
+
+      /*
+       * Only paying subscriptions contribute. Counting a lapsed or trialling
+       * workspace as revenue is the fastest way to build a dashboard nobody
+       * trusts — and a trial is `status = 'trialing'` with no invoice behind it,
+       * so it is excluded here even though it now counts towards its tier.
+       */
+      if (!described.onTrial && business.subscription_status === 'active') {
         // A yearly plan is ten months' price, so its monthly contribution is
         // 10/12 of the list rate — reporting the list rate would overstate MRR.
         entry.mrrCents +=
@@ -86,7 +106,13 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     businesses: {
       total: num(row?.businesses_total),
       active: num(row?.businesses_active),
-      trialing: num(row?.businesses_trialing),
+      /*
+       * The RPC is authoritative when it answered. `trialingCount` is the same
+       * figure derived in TypeScript from the plan scan, and it is the fallback
+       * when the RPC was rejected — the tile then reads the real number instead
+       * of a zero that looks like "nobody is trialling".
+       */
+      trialing: row ? num(row.businesses_trialing) : trialingCount,
       lapsed: num(row?.businesses_lapsed),
     },
     customersTotal: num(row?.customers_total),
@@ -108,8 +134,17 @@ export type AdminBusinessRow = {
   id: string
   name: string
   slug: string
+  /** The tier whose features apply now — Pro for a live trial, not `lapsed`. */
   plan: PlanId
   planLabel: string
+  /**
+   * True while the trial window is open.
+   *
+   * Separate from `plan` because the console has to say two things at once: what
+   * this workspace can do today, and whether anybody is paying for it. Collapsing
+   * them is what previously rendered a live trial as "Inactive".
+   */
+  onTrial: boolean
   subscriptionStatus: string | null
   trialEndsAt: string | null
   createdAt: string
@@ -182,13 +217,14 @@ export async function listBusinesses(options: {
 
   return {
     businesses: (data ?? []).map((row) => {
-      const plan = normalizePlanId(row.plan) ?? 'lapsed'
+      const described = describeStoredPlan(row)
       return {
         id: row.id as string,
         name: row.name as string,
         slug: row.slug as string,
-        plan,
-        planLabel: PLANS[plan].name,
+        plan: described.effectivePlan,
+        planLabel: described.label,
+        onTrial: described.onTrial,
         subscriptionStatus: (row.subscription_status as string) ?? null,
         trialEndsAt: (row.trial_ends_at as string) ?? null,
         createdAt: row.created_at as string,
@@ -241,9 +277,21 @@ export async function getBusinessDetail(businessId: string): Promise<Record<stri
 
   if (!business) return null
 
-  const plan = normalizePlanId(business.plan) ?? 'lapsed'
+  const described = describeStoredPlan(business)
   return {
-    business: { ...business, plan, plan_label: PLANS[plan].name },
+    /*
+     * `plan` is not overwritten any more. The drawer used to replace the stored
+     * value with the resolved one, so an operator looking at a trial saw
+     * `plan: "lapsed"` and had no way to tell it apart from a genuinely lapsed
+     * account. Both are reported: what the column holds, and what it means.
+     */
+    business: {
+      ...business,
+      plan: business.plan,
+      effective_plan: described.effectivePlan,
+      plan_label: described.label,
+      on_trial: described.onTrial,
+    },
     team: team ?? [],
     impersonations: recentImpersonations ?? [],
   }

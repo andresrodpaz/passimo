@@ -4,7 +4,7 @@ import { redeemSchema } from '@/lib/api/schemas'
 import { redeemReward } from '@/lib/loyalty/engine'
 import { fulfillGrantedReward } from '@/lib/loyalty/grants'
 import { recordAudit } from '@/lib/audit'
-import { unprocessable } from '@/lib/errors'
+import { unprocessableBecause } from '@/lib/errors'
 
 export const runtime = 'nodejs'
 
@@ -86,7 +86,17 @@ export const PUT = defineRoute(
         expired: 'That reward has expired',
         cancelled: 'That reward was cancelled',
       }
-      throw unprocessable(messages[result.reason ?? ''] ?? 'Could not redeem that code')
+      /*
+       * The reason travels with the refusal, prefixed so it cannot collide with
+       * the balance-side reasons from `translatePostgresError`: "expired" means
+       * different things for a granted code and for a reward window, and the
+       * client renders a different sentence for each.
+       */
+      const reason = result.reason ?? 'unknown'
+      throw unprocessableBecause(
+        `grant_${reason}`,
+        messages[reason] ?? 'Could not redeem that code'
+      )
     }
 
     await recordAudit({

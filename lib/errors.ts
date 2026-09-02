@@ -85,6 +85,34 @@ export const conflict = (message: string, details?: unknown) =>
 export const unprocessable = (message: string, details?: unknown) =>
   new AppError('unprocessable', message, { details })
 
+/**
+ * A business-rule refusal that carries a stable reason code alongside its prose.
+ *
+ * The API contract writes error messages once, in English, and the browser
+ * localises them from `code` — see `lib/client/api-errors.ts`. That works for the
+ * dozen transport-level codes, and it silently fails for `unprocessable`, which is
+ * the single most common refusal in the product and the one whose *prose* carries
+ * the meaning: "Not enough balance" and "This reward is out of stock" are both
+ * `unprocessable`, so a client with only the code has nothing to say.
+ *
+ * The consequence was concentrated exactly where it hurts most. A barista in
+ * Seville, on a Spanish dashboard, taps Redeem on a customer who is two stamps
+ * short and reads *"Not enough balance to redeem this reward"* — in English, at
+ * the till, with a queue. Every other word on the screen is Spanish.
+ *
+ * So the counter refusals carry a `reason` the client can translate, and the
+ * English sentence stays as the fallback for the long tail of `unprocessable`
+ * sites that no merchant meets at speed. The alternative — threading a translator
+ * through 90-odd throw sites — puts presentation inside the transport and makes
+ * every route need a locale it has no other use for.
+ */
+export const unprocessableBecause = (reason: string, message: string, extra?: object) =>
+  new AppError('unprocessable', message, { details: { reason, ...extra } })
+
+/** As `unprocessableBecause`, for the 409 refusals on the same paths. */
+export const conflictBecause = (reason: string, message: string, extra?: object) =>
+  new AppError('conflict', message, { details: { reason, ...extra } })
+
 /** The caller is authenticated and authorised, but their plan does not allow this. */
 export const paymentRequired = (message: string, details?: unknown) =>
   new AppError('payment_required', message, { details })

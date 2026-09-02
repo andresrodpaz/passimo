@@ -1135,6 +1135,15 @@ export const en = {
     needsTerms: 'Please accept the terms to join.',
     failed: 'We could not sign you up. Please try again.',
     notFound: 'This loyalty program does not exist.',
+    /*
+     * Written for a customer standing in a shop with a scanned sticker, not for
+     * a developer reading a status code. It names the two things that actually
+     * cause this — a program that closed, or a mistyped address — so the reader
+     * knows it is not their phone.
+     */
+    notFoundBody:
+      'The business may have closed its loyalty program, or the link may have been typed incorrectly. Ask at the counter for a new QR code.',
+    notFoundAction: 'Go to Passimo',
     loadFailed: 'We could not load this page. Please try again.',
     done: 'You’re in!',
     doneBody: 'Add your card to your phone so you never lose it.',
@@ -1736,6 +1745,13 @@ export const en = {
       impersonate: 'View as merchant',
       changePlan: 'Change plan',
       empty: 'No businesses match that.',
+      /*
+       * Sits beside the tier name, not instead of it. A trial is using Pro and
+       * paying nothing, and an operator triaging an account needs both halves of
+       * that sentence at once.
+       */
+      onTrial: 'trial',
+      trialEnds: 'Trial ends {date}',
     },
     planChange: {
       title: 'Change plan',
@@ -2973,6 +2989,18 @@ export const en = {
   errors: {
     notFound: 'Not found',
     notFoundBody: 'The page you were looking for is not here.',
+    /*
+     * The route-level 404 boundary (`app/not-found.tsx`). Separate from
+     * `notFound` / `notFoundBody` above, which label an in-app empty state — a
+     * customer who is not in this workspace, a reward that was deleted. A whole
+     * page that does not exist needs a different sentence and, unlike an empty
+     * state, needs somewhere to go.
+     */
+    notFoundPageTitle: 'We could not find that page',
+    notFoundPageBody:
+      'The link may be out of date, or the page may have moved. Nothing is lost — your data is where you left it.',
+    notFoundHome: 'Back to the home page',
+    notFoundDashboard: 'Go to my dashboard',
     forbidden: 'You do not have access to this',
     forbiddenBody: 'Ask an owner or admin of this workspace to give you access.',
     paymentRequired: 'Your plan does not include this',
@@ -3000,6 +3028,33 @@ export const en = {
       upgradeFeature: '{feature} is available from {plan}.',
       upgradeLimit: 'Your plan includes {allowed} {limit}. You are using {used}.',
       upgradeLapsed: 'Your subscription is inactive. Reactivate to do that — nothing has been deleted.',
+    },
+
+    /**
+     * Business-rule refusals, keyed on the reason the server sent.
+     *
+     * `errors.api` covers the transport: expired session, wrong role, too many
+     * requests. These cover the till. Every one of them is something a member of
+     * staff reads with a customer in front of them, which is why they say what to
+     * do next rather than only what went wrong.
+     */
+    reason: {
+      insufficient_balance: 'Not enough balance yet for that reward.',
+      out_of_stock: 'That reward is out of stock.',
+      tier_too_low: 'This customer’s tier does not reach that reward yet.',
+      per_customer_limit: 'This customer has already claimed that reward the maximum number of times.',
+      reward_unavailable: 'That reward is no longer available.',
+      reward_not_started: 'That reward has not started yet.',
+      no_active_program: 'This business has no active loyalty program. Create one in Rewards.',
+      customer_blocked: 'This customer is blocked. Unblock them from their profile first.',
+      customer_anonymized: 'This customer’s data has been erased and cannot be used.',
+      grant_not_found: 'That code does not exist. Check the digits and try again.',
+      grant_already_used: 'That reward has already been used.',
+      grant_expired: 'That reward has expired.',
+      grant_cancelled: 'That reward was cancelled.',
+      gift_card_inactive: 'That gift card has been used up or cancelled.',
+      gift_card_expired: 'That gift card has expired.',
+      gift_card_empty: 'That gift card has no balance left.',
     },
   },
 } as const

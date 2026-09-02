@@ -1,6 +1,6 @@
 import 'server-only'
 import { getDb } from '@/lib/db'
-import { AppError, badRequest, notFound, unprocessable } from '@/lib/errors'
+import { AppError, badRequest, notFound, unprocessableBecause } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { enqueue } from '@/lib/jobs/queue'
 import {
@@ -201,7 +201,52 @@ export async function recordEarn(input: RecordEarnInput): Promise<EarnResult> {
   const config = await loadProgramConfig(input.businessId)
 
   if (config.programs.length === 0) {
-    throw unprocessable('This business has no active loyalty program')
+    /*
+     * Reachable from the POS on a workspace whose only program was archived, so
+     * it is a counter refusal too — and the one with the clearest remedy, which
+     * the translated copy names.
+     */
+    throw unprocessableBecause('no_active_program', 'This business has no active loyalty program')
+  }
+
+  /*
+   * A blocked customer earns nothing.
+   *
+   * `customers.status` accepts `blocked` and the dashboard offers the switch, and
+   * before this check it did nothing at all: a blocked customer was still
+   * credited on every scan, still accrued balance, and still came back from the
+   * earn call with a list of claimable rewards. So the one control a merchant has
+   * against somebody farming stamps — sharing a card, scanning a printed
+   * screenshot at two branches — was decorative, and the abuse it exists to stop
+   * continued with the merchant believing they had stopped it.
+   *
+   * Refused before the rules are evaluated rather than filtered afterwards,
+   * because an award computed and then discarded still burns a rule's
+   * `usage_count` and its cooldown.
+   *
+   * `anonymized_at` is checked in the same breath: a customer who exercised their
+   * right to erasure has no account to credit, and writing a ledger row against
+   * them re-creates the link the erasure removed.
+   */
+  const { data: customerRow } = await admin
+    .from('customers')
+    .select('status, anonymized_at')
+    .eq('id', input.customerId)
+    .eq('business_id', input.businessId)
+    .maybeSingle()
+
+  if (!customerRow) throw notFound('Customer')
+  if (customerRow.anonymized_at !== null) {
+    throw unprocessableBecause(
+      'customer_anonymized',
+      'This customer’s data has been erased and cannot be credited'
+    )
+  }
+  if (customerRow.status === 'blocked') {
+    throw unprocessableBecause(
+      'customer_blocked',
+      'This customer is blocked. Unblock them from their profile to start awarding again.'
+    )
   }
 
   const now = new Date()
@@ -538,6 +583,27 @@ export type RedeemResult = {
 
 export async function redeemReward(input: RedeemInput): Promise<RedeemResult> {
   const admin = getDb()
+
+  /*
+   * The same guard the earn path carries, for the same reason. Blocking somebody
+   * who is farming stamps and then handing them the reward anyway is the version
+   * of this bug that actually costs the merchant money.
+   */
+  const { data: customerRow } = await admin
+    .from('customers')
+    .select('status, anonymized_at')
+    .eq('id', input.customerId)
+    .eq('business_id', input.businessId)
+    .maybeSingle()
+
+  if (!customerRow) throw notFound('Customer')
+  if (customerRow.status === 'blocked') {
+    throw unprocessableBecause(
+      'customer_blocked',
+      'This customer is blocked. Unblock them from their profile to hand over rewards again.'
+    )
+  }
+
   const { data, error } = await admin.rpc('passimo_redeem_reward', {
     p_business_id: input.businessId,
     p_customer_id: input.customerId,
@@ -767,18 +833,33 @@ export function translatePostgresError(error: PostgrestLikeError): AppError {
   const hint = error.hint ?? ''
   const message = error.message ?? 'Loyalty operation failed'
 
+  /*
+   * Each of these carries its `hint` through to the client as a `reason`, so the
+   * browser can render the sentence in the merchant's language. These six are
+   * the refusals staff meet at the counter with a customer waiting, which is
+   * precisely where an English string on a Spanish screen costs the most.
+   */
   if (hint === 'insufficient_balance' || message.includes('Insufficient balance')) {
-    return unprocessable('Not enough balance to redeem this reward')
+    return unprocessableBecause('insufficient_balance', 'Not enough balance to redeem this reward')
   }
-  if (hint === 'out_of_stock') return unprocessable('This reward is out of stock')
-  if (hint === 'tier_too_low') return unprocessable('Customer tier is too low for this reward')
+  if (hint === 'out_of_stock') {
+    return unprocessableBecause('out_of_stock', 'This reward is out of stock')
+  }
+  if (hint === 'tier_too_low') {
+    return unprocessableBecause('tier_too_low', 'Customer tier is too low for this reward')
+  }
   if (hint === 'per_customer_limit') {
-    return unprocessable('This customer has already redeemed this reward the maximum number of times')
+    return unprocessableBecause(
+      'per_customer_limit',
+      'This customer has already redeemed this reward the maximum number of times'
+    )
   }
   if (hint === 'reward_inactive' || hint === 'reward_ended') {
-    return unprocessable('This reward is no longer available')
+    return unprocessableBecause('reward_unavailable', 'This reward is no longer available')
   }
-  if (hint === 'reward_not_started') return unprocessable('This reward is not available yet')
+  if (hint === 'reward_not_started') {
+    return unprocessableBecause('reward_not_started', 'This reward is not available yet')
+  }
   if (error.code === 'no_data_found' || message.includes('not found')) {
     return notFound('Reward')
   }

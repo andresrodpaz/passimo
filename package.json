@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/serve-standalone.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -25,10 +25,13 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "setup": "pnpm db:up && pnpm db:migrate && pnpm seed:demo",
-    "start:migrate": "node --experimental-strip-types scripts/migrate.ts && next start",
+    "start:migrate": "node --experimental-strip-types scripts/migrate.ts && pnpm start",
     "verify": "pnpm typecheck && pnpm lint && pnpm test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "verify:full": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:integration"
+    "verify:full": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:integration && pnpm seed:demo && pnpm db:verify",
+    "db:verify": "node --experimental-strip-types --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/db-verify.ts",
+    "verify:functional": "node scripts/verify-functional.mjs",
+    "start:next": "next start"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -101,6 +101,7 @@ type BusinessRow = {
   slug: string
   plan: PlanId
   planLabel: string
+  onTrial: boolean
   subscriptionStatus: string | null
   trialEndsAt: string | null
   createdAt: string
@@ -391,6 +392,26 @@ function BusinessesTab() {
                     >
                       {business.planLabel}
                     </Badge>
+                    {/*
+                      A trial is on the Pro feature set and paying nothing, so
+                      the tier badge alone reads as revenue. This is the second
+                      half of the sentence.
+                    */}
+                    {business.onTrial && (
+                      <Badge
+                        variant="outline"
+                        className="ml-1.5 text-xs"
+                        title={
+                          business.trialEndsAt
+                            ? t('admin.businesses.trialEnds', {
+                                date: new Date(business.trialEndsAt).toLocaleDateString(t.tag),
+                              })
+                            : undefined
+                        }
+                      >
+                        {t('admin.businesses.onTrial')}
+                      </Badge>
+                    )}
                     {business.subscriptionStatus && (
                       <span className="ml-1.5 text-xs text-muted-foreground">
                         {business.subscriptionStatus}

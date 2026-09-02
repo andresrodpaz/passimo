@@ -43,3 +43,9 @@ next.user-config.*
 # Local object storage (STORAGE_DRIVER=local)
 .uploads/
 .uploads-test/
+
+# Local server logs, written by `pnpm dev > dev.log` and `pnpm start > start.log`
+# during a verification run. Not artefacts anybody else needs.
+dev.log
+start.log
+*.log
