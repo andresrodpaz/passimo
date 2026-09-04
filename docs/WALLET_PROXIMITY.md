@@ -235,11 +235,19 @@ updates rows rather than doubling the estate.
 
 ### `/dashboard/wallet`
 
-Five tabs:
+Opens with **"Your Wallet card"** — a live preview of the merchant's real design
+and a button to the editor at `/dashboard/wallet/design`. The card used to be the
+first *tab* of this screen, which is why nobody could find it: a tab has no URL,
+so nothing could link to it. See
+[`BRAND_AND_CARD_DESIGN.md`](BRAND_AND_CARD_DESIGN.md) §2.
+
+Below that, six tabs. `?tab=` selects one, so other screens can link to the right
+place instead of the first one:
 
 | Tab | What a merchant controls |
 | --- | --- |
-| **Settings** | Master switches, wallet suggestions (Apple lock screen, Google, nearby, automatic updates, dynamic content, reward notifications, loyalty reminders), frequency caps, quiet hours, branding, pass expiry. Live card and lock-screen preview. |
+| **Brand** | The Brand Kit: logo, colours, description, contact details, social handles. Shared by the card, the join page and outbound email. |
+| **Notifications** | Master switches, wallet suggestions (Apple lock screen, Google, nearby, automatic updates, dynamic content, reward notifications, loyalty reminders), frequency caps, quiet hours, notification copy, pass expiry. Live lock-screen preview. |
 | **Campaigns** | Trigger, radius, dates, weekdays, hours, locations, segment, tier, points, visits, recency, VIP, birthday-only, reward-ready-only, title, message, emoji, CTA, colours, expiry, priority, cooldown, send cap. Live preview and a **preflight**. |
 | **Rules** | The visual IF/THEN builder plus a preset gallery. |
 | **Analytics** | The funnel, rates, per-campaign and per-location performance, and the delivery log. |

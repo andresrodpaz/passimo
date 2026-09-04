@@ -403,7 +403,7 @@ Change the primary colour, then check **every** surface follows:
 
 | Surface | How to check |
 | --- | --- |
-| Wallet card | `/dashboard/wallet` — the preview |
+| Wallet card | `/dashboard/wallet/design` — the preview in the designer, or the callout on `/dashboard` |
 | Public join page | `/join/<slug>` in a private window |
 | Browser card page | The card URL from an enrolment |
 | Public gift shop | `/gift/<slug>` |

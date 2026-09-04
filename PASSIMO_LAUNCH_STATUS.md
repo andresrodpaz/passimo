@@ -1,16 +1,23 @@
 # Passimo — Launch Status
 
-**Date:** 2026-08-28 (final recovery & completion pass)
-**Supersedes:** the earlier 2026-08-28 revision, the 2026-08-27 revision, and `LAUNCH_AUDIT_REPORT.md` (2026-08-01, written under the Fidelio name)
+**Date:** 2026-09-04 (Wallet Designer discoverability pass)
+**Previous revision:** 2026-08-28 (final recovery & completion pass)
+**Supersedes:** the 2026-08-28 revisions, the 2026-08-27 revision, and `LAUNCH_AUDIT_REPORT.md` (2026-08-01, written under the Fidelio name)
 
-This is the state after the final pass of a resumed execution. The original
-session was interrupted by a machine shutdown; two subsequent passes recovered
-the tree, finished the interrupted work, and then audited it again.
+This is the state after a resumed execution. The original session was interrupted
+by a machine shutdown; subsequent passes recovered the tree, finished the
+interrupted work, audited it, and — on 2026-09-04 — fixed three defects that no
+audit had caught, because every audit so far had read the code rather than used
+the product.
 
-Every figure below was produced by a command run against this tree on this date.
-Where something was **not** verified, it says so and names what would verify it.
-Three claims in earlier revisions were wrong; all three are corrected here and the
-corrections are called out rather than quietly edited.
+Every figure below was produced by a command run against this tree. Where
+something was **not** verified, it says so and names what would verify it.
+
+**Four claims in earlier revisions were wrong.** Three were corrected in the
+2026-08-28 pass. The fourth is corrected here and is the most instructive of the
+set: *"Wallet customization status: Complete. 98%"* was measured on the editor
+and never on the merchant. The editor was complete; the feature was unreachable
+from anywhere in the dashboard. See **Wallet Designer discoverability**.
 
 ---
 
@@ -27,8 +34,16 @@ pays for at the edges — wallet passes, outbound messaging, card payments — a
 credential-dependent, and none of those accounts exist. The architecture for all
 three is complete and tested.
 
-This pass found and fixed four defects that were each invisible by construction —
-they produced no error, no log line and no failing test:
+The 2026-09-04 pass fixed a fifth defect of the same kind as the four below, and
+the most expensive of the set: **the card designer could not be found.** It had
+no route, no sidebar entry containing the word *card*, nothing on the dashboard
+and nothing in the checklist. Every audit before this one read the code and
+concluded the feature was complete; the first person to open the dashboard
+looking for it could not find it. Fixed and verified end to end — see **Wallet
+Designer discoverability**.
+
+The four earlier defects were each invisible by construction — they produced no
+error, no log line and no failing test:
 
 1. **Migration `000021` had never been applied** (found in the previous pass, and
    now proven reproducible: an empty schema replays all 22 migrations cleanly).
@@ -47,32 +62,41 @@ they produced no error, no log line and no failing test:
    offered in the Brand panel beside three colours that all rendered. Both are now
    implemented rather than documented as gaps.
 
-### Verified this session
+### Verified on 2026-09-04
 
 | Check | Result |
 | --- | --- |
 | `pnpm typecheck` | **Pass**, clean |
 | `pnpm lint` | **Pass**, 0 errors, 0 warnings |
-| `pnpm test` (unit) | **647 passed**, 26 files |
-| `pnpm test:integration` (real PostgreSQL 16) | **71 passed**, 4 files |
-| `pnpm db:reset` — drop schema, replay from empty | **22/22 migrations applied cleanly** |
-| Fresh-schema spot check via `psql` | `wallet_card_designs`: 22 columns, 16 check constraints, PK on `business_id`. 11 brand columns on `businesses`. 22 rows in `schema_migrations`. |
-| `pnpm seed:demo` on the rebuilt database | 4 merchants (140–1,240 customers each) + platform admin |
-| Integration suite re-run against the rebuilt database | **71 passed** |
+| `pnpm test` (unit) | **667 passed**, 27 files |
+| `pnpm test:integration` (real PostgreSQL) | **82 passed**, 5 files |
+| `pnpm build` (production) | **Pass.** `/dashboard/wallet/design` present in the route manifest. |
+| `pnpm test:e2e` (Playwright, desktop + Pixel 7, against the production build and a live database) | **179 passed, 1 skipped** |
+| The merchant journey, in a browser | Signup → dashboard → card designer → template → save → reload → still there, on both viewports and in both languages |
+| Card design persistence, read back from PostgreSQL | Template, three colours, headline and a visibility toggle all survive; `customised` flips from false to true |
 | Supabase dependency | **Zero** — nothing in `package.json`, nothing in first-party source |
 | localhost development | Preserved. `env.appUrl` falls back to `http://localhost:3000` |
 
-### Not verified this session
+Verified in the 2026-08-28 pass and unchanged since:
+
+| Check | Result |
+| --- | --- |
+| `pnpm db:reset` — drop schema, replay from empty | **22/22 migrations applied cleanly** |
+| Fresh-schema spot check via `psql` | `wallet_card_designs`: 22 columns, 16 check constraints, PK on `business_id`. 11 brand columns on `businesses`. |
+| `pnpm seed:demo` on the rebuilt database | 4 merchants (140–1,240 customers each) + platform admin |
+
+### Still not verified
 
 | Check | Why it matters |
 | --- | --- |
-| `pnpm build` (production) | Not run — declined during this session. **The single largest unknown in this document.** |
-| `pnpm test:e2e` (Playwright, desktop + mobile) | Depends on a production build, so it could not run either |
+| Tablet viewports (iPad, Android tablet) | `playwright.config.ts` has a phone project and a desktop project and nothing between them. The intermediate breakpoint is the same Tailwind grid, so this is missing coverage rather than a known defect. |
 | Lighthouse / axe audit | No tooling run. The accessibility and performance sections are inspection-based and say so. |
+| Real Apple / Google pass issuance | Credential-dependent. No certificates or issuer account exist on this deployment; the product says so on screen rather than implying otherwise. |
 
-**Correction to an earlier revision:** the 2026-08-27 status reported a passing
-production build. That result predates every change in the last two passes and
-should not be read as current.
+**Corrections to earlier revisions.** The 2026-08-28 revision listed
+`pnpm build` and `pnpm test:e2e` as the two largest unknowns in this document.
+Both have now been run against this tree and both pass; those rows are gone
+rather than quietly softened.
 
 ---
 
@@ -104,9 +128,200 @@ through `NEXT_PUBLIC_APP_URL`.
 
 ---
 
+# Wallet Designer discoverability
+
+**Date of this pass:** 2026-09-04.
+**Status: fixed and verified against a live database.**
+
+## The previous problem
+
+Reported from manual verification: *"The Wallet Card Designer was previously
+implemented according to the product requirements, but during manual
+verification I cannot find it anywhere in the merchant dashboard."*
+
+That report was correct, and the section below it in this document — *Wallet
+customization status: Complete. 98%* — was wrong in the way that matters. The
+editor was complete. The **feature** was not, because a merchant could not reach
+it.
+
+Searching the dashboard as a merchant would, the terms that returned nothing
+were: *Wallet Card Designer*, *Card customization*, *Wallet design*, *Apple
+Wallet design*, *Google Wallet design*, *Customize card*. The one row anywhere in
+the product that used the word "card" — the checklist's *"Personalise the card"* —
+linked to Settings, which does not contain the card designer.
+
+## Root cause
+
+Of the seven possibilities in the report, the true one was **"the feature exists
+but has no navigation entry"**, compounded by four others. Determined by reading
+the code, not the previous audits:
+
+| Claim | Verdict |
+| --- | --- |
+| Feature is actually incomplete | **False.** `components/wallet/card-designer.tsx` (716 lines), 11 templates, `wallet_card_designs` since migration `000021`, `GET`/`PATCH`/`POST /api/v1/wallet/design`, live preview through the real `resolveCardDesign`. All working. |
+| No navigation entry | **True.** No sidebar row, in either language, contained the word *card*. |
+| Hidden behind an unintuitive route | **True.** It had no route at all. It was the first `TabsTrigger value="design"` of `/dashboard/wallet`, whose sidebar label was *"Wallet & proximity"*, in the group *"Configure"*, last in the list. A tab has no URL, so **nothing could link to it.** |
+| Not linked from the dashboard | **True.** `app/dashboard/page.tsx` had no reference to the card. Neither did the first-steps checklist. |
+| Only during onboarding | **False**, but onboarding made it worse: the card step's help text said *"…are in the card designer, whenever you want them"* and the final screen said *"Fine-tune the card in the designer"* — naming a screen with no link and no findable location. Telling a merchant a feature exists without saying where is worse than silence. |
+| Permissions or plan gating hide it | **False.** Gated on `wallet:read` / `wallet:write` only, which owner, admin and manager all hold. No `feature` flag, so no plan gate — now asserted in `tests/unit/dashboard-navigation.test.ts`. |
+| UI entry is unclear | **True**, and the deepest cause: three separate surfaces (`/dashboard/wallet` tabs, Settings → Card, the Brand Kit panel) each partly answered "where do I change my card", and none said *card design* anywhere a merchant looks first. |
+
+The one-sentence version: **the editor was a tab, tabs have no address, and
+nothing without an address can be linked to, labelled, or found.**
+
+## Changes implemented
+
+| # | Change | Files |
+| --- | --- | --- |
+| 1 | **The designer got its own route** — `/dashboard/wallet/design`, headed *"Your Wallet card"* over *"Design the digital loyalty card your customers will save to Apple Wallet and Google Wallet."* | `app/dashboard/wallet/design/page.tsx` (new) |
+| 2 | **The design tab was removed, not duplicated.** `CardDesignPanel` has exactly one mount point. Two URLs rendering one editor is the duplication that hid the problem in the first place. | `app/dashboard/wallet/page.tsx`, `components/wallet/design-panel.tsx` |
+| 3 | **The sidebar gained a group called "Your card"**, whose first row is **"Card design"** (`Diseño de la tarjeta`). Navigation moved into a pure, testable module. | `lib/dashboard/navigation.ts` (new), `app/dashboard/layout.tsx` |
+| 4 | **Active-route matching now takes the longest prefix.** Without it `/dashboard/wallet/design` highlighted two sidebar rows and titled the page "Wallet & proximity". | `lib/dashboard/navigation.ts` |
+| 5 | **A dashboard callout** showing the merchant's *real* card — resolved through the same function the pass builder uses — with *Customise card* under it. First-time copy: *"Your card is ready to customise"* / *"Design your card"*. | `components/wallet/card-callout.tsx` (new), `app/dashboard/page.tsx` |
+| 6 | **The same callout heads the Wallet screen**, above the tabs, so the screen a merchant plausibly opens first leads out to the editor. | `app/dashboard/wallet/page.tsx` |
+| 7 | **A Quick Start row** — *"Customise your Wallet card"* → the editor, second in the list, no plan gate. The old *"Personalise the card"* row was reworded to *"Add your logo and brand colours"* and repointed from Settings to the Brand tab, so the two stop competing. | `lib/onboarding/checklist.ts` |
+| 8 | **A `customised` fact**, derived not stored: *a design row exists AND `updated_at > created_at`*. Row-exists would be wrong (onboarding writes a seeded design for everyone) and value-comparison would be wrong (the seed is per-trade). One function feeds both the callout and the checklist, so they cannot disagree. | `lib/wallet/card-design-store.ts`, `app/api/v1/wallet/design/route.ts`, `app/api/v1/onboarding/route.ts` |
+| 9 | **Onboarding's three closing suggestions became links**, led by *"Customise your Wallet card"*. The card step's help text now names the destination: *"…live in Your card → Card design in your dashboard"*. | `app/onboarding/page.tsx` |
+| 10 | **Settings → Card** *"Open card designer"* now points at the designer instead of at the screen that used to contain it. | `app/dashboard/settings/page.tsx` |
+| 11 | **`?tab=` on the Wallet screen**, so the designer's "Brand kit" link lands on the right tab rather than the first one. Recorded with `replaceState`, so reading three tabs does not cost three history entries. | `app/dashboard/wallet/page.tsx` |
+| 12 | **The template gallery got an `id`**, so *"Browse templates"* lands on the gallery rather than the top of a long editor. | `components/wallet/card-designer.tsx` |
+| 13 | **The landing demo gained its own CTA** — *"Create your loyalty program"* under the interactive card, with *"No account needed to play with the demo above."* Somebody who has just watched the card follow their colour choice should not have to scroll back to the hero to act on it. | `components/landing/landing-page.tsx` |
+
+Route audit: no dead or duplicated designer routes remain. Every component under
+`components/wallet/` has at least one importer. `/api/v1/wallet/preview` is the
+campaign preflight endpoint used by the campaigns panel, not a card route.
+
+### Two defects found by looking at the screens, not by asserting on them
+
+Both were caught by screenshotting the finished work on a phone and a desktop and
+reading it as a merchant would. Neither would have failed any test that existed,
+which is the same class of problem as the one this pass set out to fix.
+
+| # | Defect | Fix |
+| --- | --- | --- |
+| 14 | **The checklist ticked "Add your logo" on day one**, struck through, for a merchant who had uploaded nothing. `brandingCustomised` accepted "a colour that differs from the platform default" — and signup provisions a *trade-appropriate* palette, so a café is seeded brown and nothing ever matches the default. Every merchant arrived with a completed item they had not completed. | The fact is now the logo and only the logo — the one thing in that item nobody can seed for them. Colour work is judged by the card-design row instead. The item was renamed to match. Guarded by an e2e assertion that a seconds-old account reads "0 of 6 done". |
+| 15 | **On a phone, Save sat above every control.** The preview column is `order-1` on narrow screens, deliberately — a merchant should see what they are editing before the controls — which put the save button at the top, so after scrolling down through templates, colours, toggles and copy the only way to save was to scroll all the way back up. | A sticky action bar after the controls on mobile (`order-3 sticky bottom-4`), with the desktop copy still under the sticky preview. One element, rendered in two slots, so there is nothing to keep in step. Guarded by an assertion that Save is in the viewport once the last field is. |
+
+The checklist also gained an accessible name, so it is announced as a landmark
+rather than as an anonymous `<section>` — which is what an unnamed one is, to a
+screen reader and to a role-based test alike.
+
+## Merchant access path
+
+Verified in a browser against a live database:
+
+```
+sign in → dashboard
+            ├── sidebar    YOUR CARD → Card design             1 click
+            ├── callout    "Your Wallet card" → Customise card 1 click
+            └── checklist  "Customise your Wallet card"        1 click
+```
+
+Answering the acceptance question — *"I want to customise the loyalty card my
+customers will save to their Wallet. Where do I click?"* — there are three
+answers on the first screen after sign-in, all one click, and one of them is a
+picture of their own card.
+
+Six entry points in total; the other three are the Wallet screen (2 clicks), the
+end of onboarding (1) and Settings → Card (3). All six use the exported
+`CARD_DESIGNER_HREF` constant, so the route is written once.
+
+## Mobile status
+
+**Verified.** The Playwright `mobile` project (Pixel 7) runs every journey test
+in the new spec, including an assertion that the designer produces **no
+horizontal overflow** — a colour picker off the side of the screen is a control
+that does not exist. The editor stacks preview-first (`order-1`) on narrow
+screens so the merchant sees what they are editing before the controls, and the
+save button stays reachable.
+
+Not verified: iPad and Android tablet, which have no project in
+`playwright.config.ts`. The layout between the phone and desktop breakpoints is
+the same Tailwind grid, so this is a gap in coverage rather than a known defect —
+and it is stated here rather than glossed.
+
+## Localization status
+
+**Verified, in both directions.** Every string added in this pass exists in `en`
+and `es`; the dictionary's shape is the type contract, so a missing Spanish key
+is a build error rather than a half-English page.
+
+Checked live at `/dashboard/wallet/design` and `/dashboard/wallet` in both
+locales, asserting both that the expected strings are **present** and that the
+other language's strings are **absent**. The second half is what catches the real
+failure mode: a screen built from thirty `t()` calls that renders twenty-nine and
+leaves one English literal behind is invisible to a test that only looks for what
+should be there. `Personaliza tu tarjeta`, `Vista previa`, `Guardar diseño` and
+`Color principal` all resolve. The Spanish assertion is now permanent, in
+`tests/e2e/wallet-card-designer.spec.ts`.
+
+## Testing status
+
+Run on 2026-09-04 against this tree, with PostgreSQL up:
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | pass |
+| `pnpm lint` | pass, no warnings |
+| `pnpm test` | **667 passed**, 27 files |
+| `pnpm build` | pass; `/dashboard/wallet/design` present in the route manifest |
+| `pnpm test:e2e` — the whole suite, both viewports | **179 passed, 1 skipped** (the skip is a mobile-only test under the desktop projection) |
+
+New coverage:
+
+- `tests/unit/dashboard-navigation.test.ts` — assertions about *reachability*,
+  which is the property that was broken: the designer has an entry, its label
+  contains *card* in both dictionaries, it precedes the proximity screen, it has
+  no plan gate, every role with `wallet:read` sees it, every sidebar href
+  resolves to a real `page.tsx`, and longest-prefix matching works.
+- `tests/unit/onboarding-checklist.test.ts` — extended: the card row is second,
+  points at the designer, is offered on every purchasable plan, and does not tick
+  when the *brand* is customised.
+- `tests/e2e/wallet-card-designer.spec.ts` — the journey, plus save → reload →
+  still-there, both wallet previews present and labelled as previews, mobile
+  overflow, and the Spanish render.
+
+Persistence was also verified directly against the database rather than inferred:
+a fresh workspace reports `customised: false`; after applying the `luxury`
+template and patching colours, headline and a visibility toggle, a re-read
+returns `template: luxury`, `background: #123456`, `accent: #abcdef`,
+`headline: "Cafe Verify"`, `showTier: false`, `customised: true`, and
+`GET /api/v1/onboarding` reports `cardDesignCustomised: true` from the same
+source. No local-only state.
+
+One test-quality fix was needed on the way: signing in per test spent the `auth`
+rate limit (8 requests / 5 minutes / IP) before the file's last assertion, so
+inside the full suite this spec failed on our own security control rather than on
+the product. The session is now established once and replayed.
+
+## Remaining limitations
+
+Stated rather than implied:
+
+1. **No real Apple or Google pass is issued on this deployment.** Unchanged and
+   credential-dependent. The designer says so itself, deriving the claim from
+   `walletService().status()` rather than assuming it. The design *is* saved and
+   will be used the moment credentials exist.
+2. **Tablet viewports are not in the e2e matrix.** See *Mobile status*.
+3. **One design per business.** The primary key on `wallet_card_designs` is
+   `business_id`; per-location card variants remain out of scope.
+4. **`coverUrl` still renders nowhere** — the one remaining half-wired brand
+   field, unchanged by this pass.
+5. **`customised` is a proxy, not a record of intent.** A merchant who reopens
+   onboarding and re-activates their card counts as having customised it. They
+   did change something, so the tick is defensible, but it is a heuristic and
+   worth knowing.
+
+---
+
 # Wallet customization status
 
-**Complete. 98%.**
+**Editor: complete. Discoverability: was 0%, fixed 2026-09-04 — see the
+section above.**
+
+The "98%" this section previously claimed was measured on the editor alone,
+and was misleading as a result: a control a merchant cannot reach is not a
+feature they have. It is deliberately not restated as a percentage.
 
 Without code, a merchant can set: template, card style (solid / gradient /
 duotone / frosted), progress rendering (auto / bar / stamps / points / none),
@@ -352,8 +567,15 @@ Grounds: touch targets on public flows are `h-12`/`h-14` (48–56 px, above the
 counter scanner designed full-screen for a phone at a till; a Pixel 7 Playwright
 project defined alongside Desktop Chrome.
 
-**Caveat:** the mobile e2e project **was not run**, because it needs a production
-build. 88% is a code-reading judgement, not a measurement.
+**Updated 2026-09-04: the mobile project has now been run.** The full Playwright
+suite passes on the Pixel 7 projection against a production build — 179 passed, 1
+skipped across both projects — including two horizontal-overflow assertions: the
+public flows (`public.spec.ts`) and the card designer, which is the densest
+merchant screen in the product and the one most likely to break at 412 px.
+
+**Remaining caveat:** no tablet project exists, and there has been no real-device
+pass. The number stays at 88% because the phone and the desktop are measured and
+everything between them is still inferred.
 
 ---
 
@@ -500,19 +722,35 @@ been performed.
 
 # Testing status
 
-**Good, with one real hole. 86%.**
+**Good. The hole is closed. 93%.**
+
+Every row below was run on 2026-09-04 against this tree, with PostgreSQL up and
+a production build serving on `localhost:3000`.
 
 | Suite | Result |
 | --- | --- |
-| Unit — `pnpm test` | **647 passed, 26 files** |
-| Integration — `pnpm test:integration` (real PostgreSQL 16) | **71 passed, 4 files** |
-| Integration re-run on a freshly rebuilt schema | **71 passed** |
+| Unit — `pnpm test` | **667 passed, 27 files** |
+| Integration — `pnpm test:integration` (real PostgreSQL) | **82 passed, 5 files** |
 | `pnpm typecheck` | Clean |
 | `pnpm lint` | Clean — 0 errors, 0 warnings |
-| End-to-end — `pnpm test:e2e` | **Not run.** Needs a production build. |
+| `pnpm build` | Clean |
+| End-to-end — `pnpm test:e2e`, both viewports | **179 passed, 1 skipped.** The skip is a mobile-only test under the desktop projection. |
 
-**154 tests added across the two passes** (493 → 647), covering a feature that had
-none:
+**The e2e hole from the previous revision is closed.** That revision said
+"`tests/e2e/merchant-journey.spec.ts` (326 lines) walks the full flow and has not
+been executed against this tree". It has now been executed, along with every
+other spec, on both the desktop and Pixel 7 projections, against a real database.
+Nothing failed.
+
+Running it surfaced one thing worth recording, because it is the kind of failure
+that reads as a product bug and is not: the new designer spec signed in once per
+test, which spent the `auth` rate limit (8 requests / 5 minutes / IP) before the
+file's last assertion. Inside the full suite it therefore failed on our own
+security control. Fixed by establishing the session once and replaying its
+cookies — which is also closer to what a merchant does.
+
+**174 tests added across the three passes** (493 → 667), covering features that
+had none:
 
 | File | Tests | Covers |
 | --- | --- | --- |
@@ -520,6 +758,9 @@ none:
 | `wallet-pass-build.test.ts` | 35 | Apple `pass.json` and Google class/object structure; the ten-location cap and widest-radius `maxDistance`; locale-correct dates; **upload ceiling equals embed ceiling**; a guard that no English phrase survives on a Spanish pass |
 | `email-shell.test.ts` | 21 | The shell agreeing with the card on text colour; `lang`; translated footer; HTML escaping of merchant copy |
 | `landing-demo.test.ts` | 32 | The demo loop; repeat cycles; points surviving redemption; all 24 trade/palette combinations legible |
+| `dashboard-navigation.test.ts` | 13 | Added 2026-09-04. Whether the card designer can be *reached*: a sidebar entry exists, its label contains *card* in both dictionaries, it precedes the proximity screen, it carries no plan gate, every role with `wallet:read` sees it, every sidebar href resolves to a real `page.tsx`, and longest-prefix route matching works |
+| `onboarding-checklist.test.ts` | +7 | Added 2026-09-04. The card row is second, points at the designer, is offered on every purchasable plan, and does not tick when the *brand* is customised |
+| `wallet-card-designer.spec.ts` (e2e) | 11 × 2 viewports | Added 2026-09-04. Sidebar → designer, dashboard callout → designer, both wallet previews present and labelled as previews, template applied → saved → reloaded → still there, no horizontal overflow and a reachable Save on a phone, a day-one checklist with nothing falsely ticked, and the Spanish render with no English left behind |
 
 Two of those are **structural** rather than behavioural, and both exist because
 the bug they guard is a *duplicate*, which no test of any single function can see.
@@ -533,8 +774,10 @@ text colour. All four were corrected in the tests, not worked around in the code
 issue in my own work (`María` used as a placeholder), which is the suite doing its
 job.
 
-**The hole is e2e.** `tests/e2e/merchant-journey.spec.ts` (326 lines) walks the
-full flow and has not been executed against this tree.
+**What is still not covered.** Tablet viewports — `playwright.config.ts` has a
+phone and a desktop project and nothing between them. The camera path in the
+scanner cannot be driven by Playwright at all and is exercised through the manual
+panel instead, which is the fallback the counter is built to survive.
 
 ## Merchant journey — verified where it can be, honestly labelled where it cannot
 
@@ -542,8 +785,9 @@ full flow and has not been executed against this tree.
 | --- | --- |
 | Signup, session lifecycle, lockout, revocation | **Verified** — real PostgreSQL |
 | Business creation and provisioning | **Verified** — integration suite, on a schema rebuilt from empty |
-| Program → plan → shop → card → activate | **Verified by unit test** for resume logic and presets; not clicked through a browser |
-| Brand Kit configuration, wallet customization, preview | **Verified** — schema present, store and resolver tested, both providers tested |
+| Program → plan → shop → card → activate | **Verified end to end** — walked in a browser on both viewports, 2026-09-04 |
+| Brand Kit configuration, wallet customization, preview | **Verified end to end** — schema, store and resolver tested; the designer opened, edited, saved, reloaded and re-read from the database in a browser |
+| **Finding** the card designer as a new merchant | **Verified end to end** — sidebar, dashboard callout and checklist all reach it in one click, on both viewports and in both languages |
 | Customer creation, loyalty transaction, reward redemption | **Verified** — real PostgreSQL |
 | Subscription gating | **Verified** — unit tests on plans, gates and limits |
 | Tenant isolation | **Verified** — attack-shaped integration tests |
@@ -570,16 +814,29 @@ Added and corrected across these passes:
 - **`docs/INTERNATIONALIZATION.md` — corrected.** The false "100%" replaced with an
   accurate account including *why* it was wrong, plus a table of which background
   surface resolves which locale.
-- **`docs/TESTING.md` — corrected.** Counts updated; new suites described; the e2e
-  suite explicitly marked written-but-not-run rather than left implying it passes.
+- **`docs/TESTING.md` — corrected twice.** Counts updated; new suites described.
+  The 2026-08-28 pass marked the e2e suite written-but-not-run rather than
+  implying it passed; the 2026-09-04 pass ran it and replaced that with the real
+  numbers, added `wallet-card-designer.spec.ts` and `demo-plans.spec.ts` to the
+  file table, and wrote down the auth-rate-limit pattern a new spec has to follow
+  to avoid failing on our own security control.
 - **`docs/README.md`** — index updated.
+
+Added 2026-09-04:
+
+- **`docs/BRAND_AND_CARD_DESIGN.md` §2 — "Where the designer lives, and how a
+  merchant finds it".** The route, the six entry points and their click counts,
+  the `customised` derivation and why the two obvious alternatives are both
+  wrong, the naming decision, and what guards it. Every other section number
+  shifted by one and the cross-references moved with them.
 
 Credential-dependent integrations are marked as such throughout, using the
 established labels: *implemented / partial / planned / credential-dependent*.
 
 **The 8%:** `STORE_EXPERIENCE.md` and `API.md` have not been re-read against
-current code in these passes. `API.md` does not document the `kind=hero` upload
-parameter added today.
+current code in these passes. `API.md` documents neither the `kind=hero` upload
+parameter nor the `customised` field now returned by
+`GET /api/v1/wallet/design`.
 
 ---
 
@@ -642,11 +899,18 @@ Only two items, both small:
 
 ## Verification gaps — not code, but not nothing
 
-3. **`pnpm build` has not been run against this tree.** The largest unknown here.
-4. **`pnpm test:e2e` has not been run**, including the mobile viewport project.
-5. **No accessibility audit** (axe / Lighthouse / screen reader) and no real-device
-   mobile pass.
-6. **No production deployment has ever run.** Everything in `docs/RAILWAY.md` is
+Two of the four gaps listed here in the previous revision are closed: `pnpm build`
+and `pnpm test:e2e` have both been run against this tree, on both viewport
+projects, against a live database. What remains:
+
+3. **No tablet viewport in the e2e matrix.** `playwright.config.ts` has a Pixel 7
+   and a Desktop Chrome project. iPad and Android tablet widths sit between them
+   and are not exercised.
+4. **No accessibility audit** (axe / Lighthouse / screen reader) and no
+   real-device mobile pass. Landmarks, labels, roving tabindex on the preview
+   switch and horizontal-overflow are asserted by Playwright; nothing measures
+   contrast or announcement quality end to end.
+5. **No production deployment has ever run.** Everything in `docs/RAILWAY.md` is
    written from configuration, not experience.
 
 ## Credential-dependent — implemented, cannot be exercised

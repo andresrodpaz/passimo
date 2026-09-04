@@ -30,6 +30,7 @@ import { useWorkspace } from '@/lib/client/workspace'
 import { MetricGrid, MetricTile, useFormatValue } from '@/components/metrics'
 import { AsyncBoundary, EmptyState, LoadingCards } from '@/components/states'
 import { FirstStepsChecklist } from '@/components/onboarding/first-steps'
+import { WalletCardCallout } from '@/components/wallet/card-callout'
 import { useI18n } from '@/lib/i18n'
 import type { TranslationKey } from '@/lib/i18n'
 import type { AnalyticsOverview } from '@/lib/domain/types'
@@ -71,6 +72,13 @@ export default function DashboardOverview() {
                 <GrowthChart overview={overview} />
               </div>
               <div className="space-y-6">
+                {/*
+                  The card the merchant's customers carry, on the screen the
+                  merchant opens most, with the way into the designer under it.
+                  This is the answer to "where do I click to customise my card?"
+                  for someone who has read nothing and been told nothing.
+                */}
+                <WalletCardCallout variant="compact" />
                 <NextBestActions overview={overview} />
                 <InsightPreview businessId={businessId!} />
               </div>

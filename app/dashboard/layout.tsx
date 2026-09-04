@@ -22,6 +22,7 @@ import {
   Crown,
   Handshake,
   Lock,
+  Palette,
   Rocket,
   Wallet,
   MapPin,
@@ -43,169 +44,42 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Permission } from '@/lib/auth/rbac'
-import { PLANS, type Feature } from '@/lib/billing/plans'
+import { PLANS } from '@/lib/billing/plans'
+import { DASHBOARD_NAV, activeNavEntry, type NavIconKey } from '@/lib/dashboard/navigation'
 import { TrialBanner } from '@/components/billing/trial-banner'
 import { ReactivationBanner } from '@/components/billing/upgrade'
 import { NotificationBell } from '@/components/notification-bell'
 import { ScanButton } from '@/components/scanner/scan-button'
 import { LanguageToggle } from '@/components/language-toggle'
 import { useI18n } from '@/lib/i18n'
-import type { TranslationKey } from '@/lib/i18n'
-
-type NavItem = {
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  /** Dictionary key, not a literal — the sidebar is the most-read text in the app. */
-  labelKey: TranslationKey
-  permission?: Permission
-  /**
-   * Plan capability. A gated item is still *shown* — with a lock — because a
-   * merchant cannot want a feature they have never seen. Hiding paid features
-   * is how a product sells nothing.
-   */
-  feature?: Feature
-}
 
 /**
- * Navigation is grouped by what a merchant is trying to *do*, not by database
- * table: run the shop today, sell more, grow it, understand it, configure it.
+ * Icon per navigation entry.
+ *
+ * The structure of the sidebar lives in `lib/dashboard/navigation.ts`, which is
+ * pure and therefore testable; only the pictures live here. A `Record` keyed on
+ * the union means a new entry with no icon is a type error rather than a blank
+ * square in the sidebar.
  */
-const NAV_GROUPS: { labelKey: TranslationKey; items: NavItem[] }[] = [
-  {
-    labelKey: 'dashboard.nav.today',
-    items: [
-      { href: '/dashboard', icon: LayoutDashboard, labelKey: 'dashboard.nav.overview' },
-      {
-        href: '/pos',
-        icon: ScanLine,
-        labelKey: 'dashboard.nav.pointOfSale',
-        permission: 'loyalty:earn',
-      },
-      {
-        href: '/dashboard/customers',
-        icon: Users,
-        labelKey: 'dashboard.nav.customers',
-        permission: 'customers:read',
-      },
-    ],
-  },
-  {
-    labelKey: 'dashboard.nav.sell',
-    items: [
-      {
-        href: '/dashboard/rewards',
-        icon: Gift,
-        labelKey: 'dashboard.nav.rewards',
-        permission: 'programs:read',
-      },
-      {
-        href: '/dashboard/gift-cards',
-        icon: CreditCard,
-        labelKey: 'dashboard.nav.giftCards',
-        permission: 'programs:read',
-        feature: 'gift_cards',
-      },
-      {
-        href: '/dashboard/memberships',
-        icon: Crown,
-        labelKey: 'dashboard.nav.memberships',
-        permission: 'programs:read',
-        feature: 'memberships',
-      },
-    ],
-  },
-  {
-    labelKey: 'dashboard.nav.grow',
-    items: [
-      /*
-       * These two carry their `feature` for the same reason gift cards and
-       * memberships do. Reading a campaign list is not gated — a downgrade must
-       * never hide data — but *creating* one is, so leaving the lock off meant a
-       * Starter merchant met the paywall only after choosing a template and
-       * writing the copy. The lock moves that answer to before the work.
-       */
-      {
-        href: '/dashboard/campaigns',
-        icon: Megaphone,
-        labelKey: 'dashboard.nav.campaigns',
-        permission: 'campaigns:read',
-        feature: 'campaigns',
-      },
-      {
-        href: '/dashboard/automations',
-        icon: Zap,
-        labelKey: 'dashboard.nav.automations',
-        permission: 'campaigns:read',
-        feature: 'automations',
-      },
-      {
-        href: '/dashboard/growth',
-        icon: Rocket,
-        labelKey: 'dashboard.nav.growth',
-        permission: 'analytics:read',
-      },
-      {
-        href: '/dashboard/network',
-        icon: Handshake,
-        labelKey: 'dashboard.nav.network',
-        permission: 'settings:read',
-        feature: 'coalition',
-      },
-    ],
-  },
-  {
-    labelKey: 'dashboard.nav.understand',
-    items: [
-      {
-        href: '/dashboard/analytics',
-        icon: BarChart3,
-        labelKey: 'dashboard.nav.analytics',
-        permission: 'analytics:read',
-      },
-      {
-        href: '/dashboard/insights',
-        icon: Sparkles,
-        labelKey: 'dashboard.nav.insights',
-        permission: 'analytics:read',
-      },
-    ],
-  },
-  {
-    labelKey: 'dashboard.nav.configure',
-    items: [
-      /*
-       * Locations sits above the wallet screen deliberately: a geofence needs a
-       * centre, so a merchant who opens "Wallet & proximity" first and finds every
-       * radius inert has been sent down the wrong path.
-       */
-      {
-        href: '/dashboard/locations',
-        icon: MapPin,
-        labelKey: 'dashboard.nav.locations',
-        permission: 'locations:read',
-      },
-      {
-        href: '/dashboard/wallet',
-        icon: Smartphone,
-        labelKey: 'dashboard.nav.wallet',
-        permission: 'wallet:read',
-      },
-      {
-        href: '/dashboard/settings',
-        icon: Settings,
-        labelKey: 'dashboard.nav.settings',
-        permission: 'settings:read',
-      },
-      {
-        href: '/dashboard/billing',
-        icon: Wallet,
-        labelKey: 'dashboard.nav.billing',
-        permission: 'settings:read',
-      },
-    ],
-  },
-]
+const NAV_ICONS: Record<NavIconKey, React.ComponentType<{ className?: string }>> = {
+  overview: LayoutDashboard,
+  pos: ScanLine,
+  customers: Users,
+  rewards: Gift,
+  giftCards: CreditCard,
+  memberships: Crown,
+  walletCard: Palette,
+  wallet: Smartphone,
+  campaigns: Megaphone,
+  automations: Zap,
+  growth: Rocket,
+  network: Handshake,
+  analytics: BarChart3,
+  insights: Sparkles,
+  locations: MapPin,
+  settings: Settings,
+  billing: Wallet,
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -233,7 +107,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   const visibleGroups = React.useMemo(
     () =>
-      NAV_GROUPS.map((group) => ({
+      DASHBOARD_NAV.map((group) => ({
         ...group,
         items: group.items.filter((item) => !item.permission || can(item.permission)),
       })).filter((group) => group.items.length > 0),
@@ -254,9 +128,9 @@ function Shell({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const currentItem = NAV_GROUPS.flatMap((group) => group.items).find(
-    (item) => item.href === pathname || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-  )
+  // Longest prefix wins, so standing in the card designer titles the page
+  // "Card design" and not "Wallet & proximity".
+  const currentItem = activeNavEntry(pathname)
   const currentLabel = currentItem ? t(currentItem.labelKey) : t('dashboard.nav.overview')
 
   return (
@@ -363,10 +237,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               </p>
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                  const active = currentItem?.href === item.href
                   const locked = Boolean(item.feature) && !has(item.feature!)
+                  const Icon = NAV_ICONS[item.iconKey]
                   return (
                     <li key={item.href}>
                       <Link
@@ -379,7 +252,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                         )}
                       >
-                        <item.icon className="size-[18px] shrink-0" />
+                        <Icon className="size-[18px] shrink-0" />
                         <span className="flex-1">{t(item.labelKey)}</span>
                         {locked && (
                           <Lock

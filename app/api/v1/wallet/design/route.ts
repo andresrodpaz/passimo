@@ -11,7 +11,7 @@ import { recordAudit } from '@/lib/audit'
 import { getBrandKit } from '@/lib/brand/store'
 import {
   applyCardDesignTemplate,
-  getCardDesign,
+  getCardDesignRecord,
   updateCardDesign,
 } from '@/lib/wallet/card-design-store'
 import { walletService } from '@/lib/wallet/service'
@@ -59,8 +59,8 @@ export const GET = defineRoute(
     const admin = getDb()
     const businessId = business.businessId
 
-    const [design, brand, { data: programRow }, { data: locationRow }] = await Promise.all([
-      getCardDesign(businessId),
+    const [record, brand, { data: programRow }, { data: locationRow }] = await Promise.all([
+      getCardDesignRecord(businessId),
       getBrandKit(businessId),
       admin
         .from('loyalty_programs')
@@ -85,7 +85,15 @@ export const GET = defineRoute(
     const goalAmount = programRow?.goal_amount == null ? null : num(programRow.goal_amount)
 
     return {
-      design,
+      design: record.design,
+      /*
+       * Whether the merchant has ever edited this card. The dashboard callout
+       * needs it to tell a first-time merchant "your card is ready to
+       * customise" instead of "change your card", and it belongs on this
+       * response rather than being guessed on the client — the seeded design
+       * onboarding writes is indistinguishable from an edited one by value.
+       */
+      customised: record.customised,
       brand,
       program: {
         name: programRow?.name ?? null,

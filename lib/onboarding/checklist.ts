@@ -29,6 +29,7 @@ import type { TranslationKey } from '@/lib/i18n/dictionaries/en'
 
 export type ChecklistItemKey =
   | 'firstScan'
+  | 'cardDesign'
   | 'locations'
   | 'branding'
   | 'proximity'
@@ -57,11 +58,36 @@ export const CHECKLIST_ITEMS: readonly ChecklistItem[] = [
     bodyKey: 'checklist.items.firstScanBody',
     href: '/pos',
   },
+  /*
+   * Second, and deliberately above everything else on the list.
+   *
+   * The card designer shipped complete and merchants could not find it: no
+   * route, no sidebar entry containing the word "card", nothing on the
+   * dashboard, and this list's nearest item was called "Personalise the card"
+   * and sent them to Settings. It is now the checklist's own row, pointing
+   * straight at the editor, and it carries no `feature` — every purchasable
+   * plan includes card design.
+   */
+  {
+    key: 'cardDesign',
+    titleKey: 'checklist.items.cardDesign',
+    bodyKey: 'checklist.items.cardDesignBody',
+    href: '/dashboard/wallet/design',
+  },
   {
     key: 'branding',
     titleKey: 'checklist.items.branding',
     bodyKey: 'checklist.items.brandingBody',
-    href: '/dashboard/settings',
+    /*
+     * The brand kit, which is a different question from the card face. It used
+     * to point at Settings, which does not hold it.
+     *
+     * Narrowed to the logo, in the label and in the fact behind it: the old
+     * "logo *or* a non-default colour" test ticked on day one for everybody,
+     * because signup seeds a trade-appropriate palette that never matches the
+     * platform default. Colours now belong to the card design row above.
+     */
+    href: '/dashboard/wallet?tab=brand',
   },
   {
     key: 'locations',
@@ -100,7 +126,24 @@ export type ChecklistFacts = {
   campaignCount: number
   teamMemberCount: number
   proximityEnabled: boolean
+  /**
+   * Whether a logo has been uploaded.
+   *
+   * Deliberately *only* the logo. The endpoint used to also accept "a colour
+   * that differs from the platform default", which ticked for every merchant on
+   * day one — signup seeds a trade-appropriate palette, so a café is provisioned
+   * brown and nothing matches the default. Colour work is judged by
+   * `cardDesignCustomised` instead.
+   */
   brandingCustomised: boolean
+  /**
+   * Whether the card design has been edited since onboarding created it.
+   *
+   * Not "does a design row exist" — onboarding writes a full seeded design when
+   * the merchant activates their card, so that would be true for everyone on
+   * day one. See `getCardDesignRecord`.
+   */
+  cardDesignCustomised: boolean
 }
 
 export type ChecklistState = {
@@ -118,6 +161,8 @@ export function isItemDone(key: ChecklistItemKey, facts: ChecklistFacts): boolea
     case 'locations':
       // One location came from onboarding, so the *step* is about the second.
       return facts.locationCount > 1
+    case 'cardDesign':
+      return facts.cardDesignCustomised
     case 'branding':
       return facts.brandingCustomised
     case 'proximity':

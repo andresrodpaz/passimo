@@ -21,6 +21,8 @@ export type CardDesignProgram = {
 
 export type CardDesignResponse = {
   design: CardDesign
+  /** True once the merchant has edited the card since it was first created. */
+  customised: boolean
   brand: BrandKit
   program: CardDesignProgram
   locationName: string | null

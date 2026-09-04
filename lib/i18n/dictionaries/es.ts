@@ -183,8 +183,13 @@ export const es: Dictionary = {
       goalPoints: '¿Cuántos puntos para conseguirlo?',
       goalPointsHint:
         'Más o menos un punto por unidad gastada, así que {goal} puntos es un cliente que se ha dejado esa cantidad contigo.',
+      /*
+       * Nombra el destino. Antes decía "en el editor de la tarjeta", que es
+       * cierto e inútil: no había forma de encontrar el editor de la tarjeta.
+       * Ahora se lee como una indicación.
+       */
       moreLater:
-        'Las plantillas, la tipografía, el reverso de la tarjeta y todo lo que muestra están en el editor de la tarjeta, cuando los quieras.',
+        'Las plantillas, la tipografía, el reverso de la tarjeta y todo lo que muestra están en Tu tarjeta → Diseño de la tarjeta, en tu panel, cuando los quieras.',
       activate: 'Activar la tarjeta',
     },
     ready: {
@@ -207,7 +212,7 @@ export const es: Dictionary = {
       next: {
         location: 'Añade tu dirección para que la tarjeta indique dónde encontrarte',
         campaigns: 'Activa una campaña pensada para tu sector',
-        design: 'Afina la tarjeta en el editor',
+        design: 'Personaliza tu tarjeta Wallet',
       },
       openScanner: 'Empezar a dar de alta clientes',
       goToDashboard: 'Explorar mi panel',
@@ -314,6 +319,13 @@ export const es: Dictionary = {
         'Datos de ejemplo, interfaz real. Ninguna cifra de esta página describe uso real.',
       previewDisclaimer:
         'Una vista previa del diseño. El pase lo emiten Apple y Google.',
+      /*
+       * La llamada a la acción de la propia demo. Nombra el paso siguiente, no
+       * el producto: quien acaba de ver la tarjeta seguir su color quiere hacer
+       * una.
+       */
+      ctaPrimary: 'Crea tu programa de fidelización',
+      ctaNote: 'No hace falta cuenta para probar la demo de arriba.',
       customiseTrade: 'Prueba otro sector',
       customiseColour: 'Prueba otro color',
       tierLabel: 'Nivel',
@@ -592,6 +604,7 @@ export const es: Dictionary = {
     nav: {
       today: 'Hoy',
       sell: 'Vender',
+      card: 'Tu tarjeta',
       grow: 'Crecer',
       understand: 'Entender',
       configure: 'Configurar',
@@ -608,6 +621,9 @@ export const es: Dictionary = {
       analytics: 'Analíticas',
       insights: 'Ideas con IA',
       locations: 'Locales',
+      // "Diseño de la tarjeta", no "Configuración del pase": el comerciante
+      // busca la palabra *tarjeta*, no un término técnico.
+      walletCard: 'Diseño de la tarjeta',
       wallet: 'Wallet y proximidad',
       settings: 'Ajustes',
       billing: 'Plan y facturación',
@@ -844,7 +860,6 @@ export const es: Dictionary = {
       rewardBody: 'Te espera una recompensa en {location}.',
     },
     tabs: {
-      design: 'Diseño de la tarjeta',
       brand: 'Marca',
       behaviour: 'Avisos',
       settings: 'Ajustes',
@@ -1202,10 +1217,32 @@ export const es: Dictionary = {
   cardDesign: {
     title: 'Diseño de la tarjeta',
     subtitle: 'El aspecto de tu tarjeta en el móvil de tus clientes.',
-    tabDesign: 'Diseño',
-    tabBehaviour: 'Comportamiento',
+
+    /*
+     * El título de `/dashboard/wallet/design`.
+     *
+     * Nombra las dos marcas a propósito: "diseño de la tarjeta" es lo que el
+     * comerciante busca, y "Apple Wallet y Google Wallet" es lo que le confirma
+     * que está en el sitio correcto.
+     */
+    pageTitle: 'Tu tarjeta Wallet',
+    pageSubtitle:
+      'Diseña la tarjeta de fidelización digital que tus clientes guardarán en Apple Wallet y Google Wallet. Cada cambio se ve al momento en la vista previa.',
+    noAccess: 'No tienes acceso a la tarjeta',
+    noAccessBody:
+      'Tu rol no puede ver ni cambiar la tarjeta Wallet. Un propietario o gerente puede abrirla por ti, o cambiar tu rol en Ajustes.',
+
+    related: {
+      title: 'Relacionado',
+      brandKit: 'Identidad de marca',
+      brandKitBody:
+        'Tu logo, tus colores y tus datos de contacto. La tarjeta parte de aquí: cámbialo una vez y todo lo demás sigue.',
+      proximity: 'Wallet y proximidad',
+      proximityBody:
+        'Cuándo avisa la tarjeta a tus clientes, con qué frecuencia y qué dice el aviso en la pantalla de bloqueo.',
+    },
+
     designHint: 'Colores, logo y disposición. Los cambios se ven al momento.',
-    behaviourHint: 'Cuándo avisa la tarjeta a tus clientes, y con qué frecuencia.',
 
     /**
      * La imagen de banner.
@@ -1330,6 +1367,25 @@ export const es: Dictionary = {
     saved: 'Diseño guardado',
     saveFailed: 'No hemos podido guardar el diseño. Inténtalo otra vez.',
     unsaved: 'Cambios sin guardar',
+  },
+
+  /**
+   * "Tu tarjeta Wallet" — el acceso al editor.
+   *
+   * Dos versiones de cada línea, porque los dos comerciantes que lo leen están
+   * en situaciones distintas: uno no ha abierto nunca el editor y necesita que
+   * le digan que la tarjeta es suya para cambiarla; el otro lo hizo el mes
+   * pasado y solo necesita volver a entrar rápido.
+   */
+  walletCard: {
+    calloutTitle: 'Tu tarjeta Wallet',
+    calloutBody: 'Esto es lo que llevan tus clientes. Cambia lo que quieras.',
+    calloutFreshBody:
+      'Tu tarjeta está lista para personalizar: tus colores, tu logo y lo que muestra.',
+    calloutFreshBadge: 'Aún sin personalizar',
+    calloutCta: 'Personalizar tarjeta',
+    calloutFreshCta: 'Diseña tu tarjeta',
+    calloutTemplates: 'Ver plantillas',
   },
 
   brandKit: {
@@ -2848,8 +2904,16 @@ export const es: Dictionary = {
       locationsBody: 'Horarios, geoperímetros e informes por sitio.',
       proximity: 'Activa los avisos por cercanía',
       proximityBody: 'Tu tarjeta vuelve a tus clientes cuando pasan por delante.',
-      branding: 'Personaliza la tarjeta',
-      brandingBody: 'Tu logo, tus colores, tu texto en la pantalla de bloqueo.',
+      cardDesign: 'Personaliza tu tarjeta Wallet',
+      cardDesignBody: 'Elige una plantilla, pon tus colores y decide qué muestra la tarjeta.',
+      /*
+       * Reescrito para que no compita con el punto anterior. Antes se llamaba
+       * "Personaliza la tarjeta" y llevaba a Ajustes, es decir: la única fila
+       * del panel que mencionaba la tarjeta enviaba al comerciante a la
+       * pantalla que no la contiene.
+       */
+      branding: 'Añade tu logo',
+      brandingBody: 'Una sola subida. Aparece en tu tarjeta, tu página de alta y tus correos.',
       firstScan: 'Atiende a tu primer cliente',
       firstScanBody: 'Abre el escáner y registra a alguien: es cosa de un minuto.',
       campaign: 'Envía tu primera campaña',

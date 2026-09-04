@@ -63,14 +63,22 @@ export function FirstStepsChecklist() {
   }
 
   return (
-    <section className="rounded-xl border border-primary/25 bg-linear-to-br from-primary/[0.06] via-card to-card p-5">
+    // Named, so it is announced as a landmark rather than an anonymous
+    // `<section>` — which is what an unnamed one is, to a screen reader and to a
+    // role-based test alike.
+    <section
+      aria-labelledby="first-steps-title"
+      className="rounded-xl border border-primary/25 bg-linear-to-br from-primary/[0.06] via-card to-card p-5"
+    >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Rocket className="size-4" aria-hidden />
           </span>
           <div>
-            <h2 className="text-base font-semibold">{t('checklist.title')}</h2>
+            <h2 id="first-steps-title" className="text-base font-semibold">
+              {t('checklist.title')}
+            </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{t('checklist.subtitle')}</p>
           </div>
         </div>

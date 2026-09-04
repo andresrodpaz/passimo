@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   BarChart3,
@@ -10,7 +11,6 @@ import {
   Clock,
   Loader2,
   MapPin,
-  Palette,
   Radio,
   Sparkles,
   Store,
@@ -35,7 +35,7 @@ import type { ProviderStatus, WalletSettings } from '@/lib/wallet/types'
 import { WalletCampaignsPanel } from '@/components/wallet/campaigns-panel'
 import { WalletRulesPanel } from '@/components/wallet/rules-panel'
 import { WalletAnalyticsPanel } from '@/components/wallet/analytics-panel'
-import { CardDesignPanel } from '@/components/wallet/design-panel'
+import { WalletCardCallout } from '@/components/wallet/card-callout'
 import { BrandKitPanel } from '@/components/brand/brand-kit-panel'
 
 /**
@@ -57,13 +57,19 @@ import { BrandKitPanel } from '@/components/brand/brand-kit-panel'
  *     about them separately and mixing them is what makes loyalty dashboards
  *     unusable:
  *
+ *       CARD       how the card looks — template, layout, what it shows
  *       BRAND      who the business is — logo, colours, contact, social
- *       DESIGN     how the card looks — template, layout, what it shows
  *       BEHAVIOUR  when the card notifies — radius, dwell, quiet hours, caps
  *
- *     Those are three tabs, in that order, and the first two are first because
- *     they are what a merchant came here to do. A restaurant owner should be able
- *     to tell which tab they want without reading any of them.
+ *     The card is no longer a tab here. It was the first tab, and being a tab is
+ *     precisely why nobody found it: a tab has no address, so nothing — not the
+ *     dashboard, not the checklist, not the end of onboarding — could link to
+ *     it, and the sidebar row above it said "Wallet & proximity". It now lives at
+ *     `/dashboard/wallet/design` with its own sidebar entry, and this screen
+ *     opens with a preview of the merchant's real card and a button to it.
+ *
+ *     The editor itself was not copied. `CardDesignPanel` has exactly one mount
+ *     point, on that route.
  *
  * What this screen used to do, and no longer does: it carried "Card background"
  * and "Card text" colour pickers writing `wallet_settings.brand_color`, above a
@@ -73,6 +79,29 @@ import { BrandKitPanel } from '@/components/brand/brand-kit-panel'
  * the card face is the Design tab's job, and what stays here is the lock-screen
  * notification, which is genuinely what this tab configures.
  */
+
+/**
+ * The tabs this screen has, and the source of truth for `?tab=`.
+ *
+ * An unknown value falls back to the first rather than rendering an empty tab
+ * panel, so a stale bookmark degrades to a working screen.
+ */
+const TABS = ['brand', 'settings', 'campaigns', 'rules', 'analytics', 'templates'] as const
+type Tab = (typeof TABS)[number]
+
+/**
+ * Records the chosen tab in the URL without a navigation.
+ *
+ * `history.replaceState` rather than `router.replace`: switching tabs must not
+ * add a history entry (a merchant pressing Back after reading three tabs
+ * expects to leave the screen, not to walk back through them) and must not
+ * re-render the route. The URL still becomes shareable, which is the point.
+ */
+function selectTab(tab: Tab) {
+  const url = new URL(window.location.href)
+  url.searchParams.set('tab', tab)
+  window.history.replaceState(window.history.state, '', url)
+}
 
 type SettingsResponse = {
   settings: WalletSettings
@@ -102,8 +131,19 @@ type SettingsResponse = {
 }
 
 export default function WalletPage() {
+  // `useSearchParams` opts the subtree out of prerendering, so the boundary is
+  // required for the build to statically generate the shell around it.
+  return (
+    <React.Suspense fallback={null}>
+      <WalletScreen />
+    </React.Suspense>
+  )
+}
+
+function WalletScreen() {
   const { t } = useI18n()
-  const { businessId, can, capabilities } = useWorkspace()
+  const { businessId, can } = useWorkspace()
+  const searchParams = useSearchParams()
 
   const { data, error, isLoading, mutate } = useApi<SettingsResponse>(
     businessId ? `/api/v1/wallet/settings${query({ businessId })}` : null
@@ -111,7 +151,16 @@ export default function WalletPage() {
 
   const canWrite = can('wallet:write')
   const canEditBrand = can('settings:write')
-  const uploadsEnabled = capabilities?.storage ?? false
+
+  /*
+   * The tab is a URL parameter so other screens can link to one.
+   * `/dashboard/wallet?tab=brand` is what the card designer's "Brand kit" link
+   * uses — without it that link would land the merchant on this screen's first
+   * tab and leave them to find the right one, which is the same class of
+   * problem this whole change exists to fix.
+   */
+  const requestedTab = searchParams.get('tab')
+  const tab = TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'brand'
 
   return (
     <div className="space-y-6">
@@ -120,6 +169,14 @@ export default function WalletPage() {
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t('wallet.subtitle')}</p>
       </header>
 
+      {/*
+        The card, first, on the screen a merchant most plausibly opens looking
+        for it. Rendered before the settings request resolves, because it fetches
+        its own data and a merchant hunting for the designer should not wait on a
+        proximity payload to see the way in.
+      */}
+      <WalletCardCallout />
+
       {isLoading && <LoadingCards count={2} />}
       {error && <ErrorState error={error} onRetry={() => void mutate()} />}
 
@@ -127,15 +184,17 @@ export default function WalletPage() {
         <>
           <ProviderStatusPanel providers={data.providers} />
 
-          <Tabs defaultValue="design">
+          {/*
+            Uncontrolled, seeded from the URL, and re-keyed when the URL says a
+            different tab. Fully controlling it would mean a router push per
+            click — three history entries for reading three tabs — while
+            `replaceState` alone does not feed back into `useSearchParams`, so
+            a controlled value would freeze on the first tab.
+          */}
+          <Tabs key={tab} defaultValue={tab} onValueChange={(next) => selectTab(next as Tab)}>
             <TabsList className="w-full justify-start overflow-x-auto">
-              {/* Design and Brand come first because they are what a merchant
-                  opens this screen to do. Behaviour is tuning; appearance is
-                  the product. */}
-              <TabsTrigger value="design" className="gap-1.5">
-                <Palette className="size-3.5" aria-hidden />
-                {t('wallet.tabs.design')}
-              </TabsTrigger>
+              {/* Brand comes first: of what is left on this screen it is the one
+                  a merchant came here to change. The rest is tuning. */}
               <TabsTrigger value="brand" className="gap-1.5">
                 <Store className="size-3.5" aria-hidden />
                 {t('wallet.tabs.brand')}
@@ -161,14 +220,6 @@ export default function WalletPage() {
                 {t('wallet.tabs.templates')}
               </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="design" className="mt-6">
-              <CardDesignPanel
-                businessId={businessId}
-                canWrite={canWrite}
-                uploadsEnabled={uploadsEnabled}
-              />
-            </TabsContent>
 
             <TabsContent value="brand" className="mt-6">
               <BrandKitPanel businessId={businessId} canWrite={canEditBrand} />

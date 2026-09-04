@@ -434,6 +434,26 @@ function DemoSection() {
         <div className="mt-12">
           <ProductDemo />
         </div>
+
+        {/*
+          The demo's own exit.
+
+          Somebody who has just changed the trade, changed the colour and
+          watched the card follow has understood the one thing the page is
+          selling. Making them scroll back to the hero to act on it is the
+          cheapest conversion this section can lose — and the copy names the
+          next step rather than the product, because "create your loyalty
+          program" is what they now want to do.
+        */}
+        <div className="mt-10 flex flex-col items-center gap-3">
+          <Button asChild size="lg" className="h-12 gap-2 px-7 text-base">
+            <Link href="/signup">
+              {t('landing.demo.ctaPrimary')}
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </Button>
+          <p className="text-xs text-muted-foreground">{t('landing.demo.ctaNote')}</p>
+        </div>
       </div>
     </section>
   )

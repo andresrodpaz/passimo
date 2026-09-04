@@ -25,6 +25,7 @@ function facts(overrides: Partial<ChecklistFacts> = {}): ChecklistFacts {
     teamMemberCount: 1,
     proximityEnabled: false,
     brandingCustomised: false,
+    cardDesignCustomised: false,
     ...overrides,
   }
 }
@@ -54,11 +55,43 @@ describe('what counts as done', () => {
     expect(isItemDone('proximity', facts({ proximityEnabled: false }))).toBe(false)
     expect(isItemDone('proximity', facts({ proximityEnabled: true }))).toBe(true)
   })
+
+  it('keeps the card design step separate from the brand step', () => {
+    // These were one item, called "Personalise the card", which pointed at
+    // Settings. They are two questions — the card face and the business
+    // identity — and answering one must not tick the other.
+    expect(isItemDone('cardDesign', facts({ brandingCustomised: true }))).toBe(false)
+    expect(isItemDone('branding', facts({ cardDesignCustomised: true }))).toBe(false)
+    expect(isItemDone('cardDesign', facts({ cardDesignCustomised: true }))).toBe(true)
+  })
 })
 
 describe('what a merchant is shown', () => {
   it('puts the first scan first, because it is the only step that teaches the job', () => {
     expect(CHECKLIST_ITEMS[0]!.key).toBe('firstScan')
+  })
+
+  it('puts customising the card second, above everything a plan can hide', () => {
+    // The discoverability fix. A merchant who reads nothing but the first two
+    // rows of this list has still been shown where the designer is.
+    expect(CHECKLIST_ITEMS[1]!.key).toBe('cardDesign')
+  })
+
+  it('points the card step at the designer itself, not at the screen around it', () => {
+    const item = CHECKLIST_ITEMS.find((candidate) => candidate.key === 'cardDesign')!
+    expect(item.href).toBe('/dashboard/wallet/design')
+  })
+
+  it('offers card design on every purchasable plan', () => {
+    // €5/month Starter included. Gating the signature feature of the product
+    // behind an upgrade would be a worse bug than hiding it was.
+    const item = CHECKLIST_ITEMS.find((candidate) => candidate.key === 'cardDesign')!
+    expect(item.feature).toBeUndefined()
+
+    for (const plan of ['starter', 'growth', 'pro', 'business'] as const) {
+      const keys = resolveChecklist(facts(), has(plan)).items.map((entry) => entry.key)
+      expect(keys, `${plan} cannot reach the card designer`).toContain('cardDesign')
+    }
   })
 
   it('hides steps the plan does not include rather than padlocking them', () => {
@@ -85,13 +118,14 @@ describe('what a merchant is shown', () => {
     // only ever reach two of them.
     const starter = resolveChecklist(facts({ scanCount: 3 }), has('starter'))
     expect(starter.done).toBe(1)
+    expect(starter.items.filter((item) => item.done)).toHaveLength(1)
     expect(starter.total).toBe(starter.items.length)
     expect(starter.total).toBeLessThan(CHECKLIST_ITEMS.length)
   })
 
   it('retires itself once every visible step is done', () => {
     const complete = resolveChecklist(
-      facts({ scanCount: 5, brandingCustomised: true }),
+      facts({ scanCount: 5, brandingCustomised: true, cardDesignCustomised: true }),
       has('starter')
     )
     expect(complete.complete).toBe(true)

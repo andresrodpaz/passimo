@@ -14,6 +14,7 @@ import {
   Loader2,
   MapPin,
   Megaphone,
+  Palette,
   ScanLine,
   Sparkles,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageToggle } from '@/components/language-toggle'
 import { BrandMark } from '@/components/brand-mark'
 import { CardPreview, type CardPreviewData } from '@/components/wallet/card-preview'
+import { CARD_DESIGNER_HREF } from '@/components/wallet/card-callout'
 import { PlatformSwitch } from '@/components/wallet/platform-switch'
 import { LogoField } from '@/components/brand/logo-field'
 import { WorkspaceProvider, useWorkspace } from '@/lib/client/workspace'
@@ -1375,21 +1377,32 @@ function ReadyStep({
             </ul>
           </section>
 
+          {/*
+            Three suggestions, and each one is a link.
+
+            This list used to be three sentences of plain text, one of which was
+            "Fine-tune the card in the designer" — naming a screen the merchant
+            had no way to reach and would not find by looking. Telling somebody a
+            feature exists and not saying where is worse than saying nothing.
+          */}
           <section className="rounded-xl border bg-card p-5">
             <h2 className="text-base font-semibold">{t('onboarding.ready.nextTitle')}</h2>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {t('onboarding.ready.next.location')}
-              </li>
-              <li className="flex items-start gap-2">
-                <Megaphone className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {t('onboarding.ready.next.campaigns')}
-              </li>
-              <li className="flex items-start gap-2">
-                <Sparkles className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {t('onboarding.ready.next.design')}
-              </li>
+            <ul className="mt-3 space-y-1">
+              <NextStepLink
+                href={CARD_DESIGNER_HREF}
+                icon={Palette}
+                label={t('onboarding.ready.next.design')}
+              />
+              <NextStepLink
+                href="/dashboard/locations"
+                icon={MapPin}
+                label={t('onboarding.ready.next.location')}
+              />
+              <NextStepLink
+                href="/dashboard/campaigns"
+                icon={Megaphone}
+                label={t('onboarding.ready.next.campaigns')}
+              />
             </ul>
           </section>
 
@@ -1408,5 +1421,28 @@ function ReadyStep({
         </div>
       </div>
     </div>
+  )
+}
+
+function NextStepLink({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="flex items-center gap-2.5 rounded-lg p-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Icon className="size-4 shrink-0" aria-hidden />
+        <span className="min-w-0 flex-1">{label}</span>
+        <ArrowRight className="size-3.5 shrink-0" aria-hidden />
+      </Link>
+    </li>
   )
 }

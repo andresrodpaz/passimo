@@ -131,11 +131,20 @@ checklist** on the dashboard: `components/onboarding/first-steps.tsx`, driven by
 | Item | Links to | Shown when the plan includes |
 | --- | --- | --- |
 | Serve your first customer | `/pos` | always |
-| Personalise the card | `/dashboard/settings` | always |
+| Customise your Wallet card | `/dashboard/wallet/design` | always |
+| Add your logo and brand colours | `/dashboard/wallet?tab=brand` | always |
 | Add your other locations | `/dashboard/locations` | `multi_location` |
 | Switch on proximity notifications | `/dashboard/wallet` | `geofencing` |
 | Send your first campaign | `/dashboard/campaigns` | `campaigns` |
 | Invite your team | `/dashboard/settings` | `team_management` |
+
+The first two rows were one row until 2026-09-04, called *"Personalise the card"*
+and pointing at `/dashboard/settings`. That was the only place in the entire
+product where a merchant met the word *card* in a list of things to do, and it
+sent them to a screen that does not contain the card designer. They are now two
+rows, because the card face and the business identity are two questions, and the
+first of them goes straight to the editor. See
+[`BRAND_AND_CARD_DESIGN.md`](BRAND_AND_CARD_DESIGN.md) §2.
 
 Four rules it follows:
 

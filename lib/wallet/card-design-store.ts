@@ -22,7 +22,36 @@ import { applyCardTemplate, findCardTemplate } from '@/lib/wallet/card-templates
  * how `wallet_settings` behaves.
  */
 
-export async function getCardDesign(businessId: string): Promise<CardDesign> {
+export type CardDesignRecord = {
+  design: CardDesign
+  /**
+   * Whether the merchant has been into the designer and changed something.
+   *
+   * Derived, never stored, for the same reason the first-steps checklist derives
+   * everything else: a stored flag drifts. The test is `updated_at > created_at`
+   * on the design row, which is exactly "this has been edited since it was first
+   * written".
+   *
+   * Row-exists would be the obvious test and it would be wrong: onboarding
+   * writes a full seeded design when the merchant activates their card, so every
+   * account has a row from day one and the answer would always be yes. Comparing
+   * against the platform default would also be wrong, because that seed is
+   * per-trade — a café's card legitimately arrives already brown and stamped.
+   *
+   * Consumed by the dashboard callout, which asks a first-time merchant to
+   * design their card and a returning one to change it, and by the checklist.
+   */
+  customised: boolean
+}
+
+/**
+ * Reads the design and whether it has ever been edited.
+ *
+ * Everything that only needs the design itself should call `getCardDesign`; this
+ * exists so the two screens that ask "has this merchant customised their card?"
+ * get the same answer from the same place.
+ */
+export async function getCardDesignRecord(businessId: string): Promise<CardDesignRecord> {
   const admin = getDb()
   const { data, error } = await admin
     .from('wallet_card_designs')
@@ -38,10 +67,24 @@ export async function getCardDesign(businessId: string): Promise<CardDesign> {
      * because a styling table was briefly unreachable.
      */
     logger.warn('wallet.card_design_read_failed', { business_id: businessId, error })
-    return { ...DEFAULT_CARD_DESIGN }
+    return { design: { ...DEFAULT_CARD_DESIGN }, customised: false }
   }
 
-  return mapCardDesign(data)
+  return { design: mapCardDesign(data), customised: hasBeenEdited(data) }
+}
+
+export async function getCardDesign(businessId: string): Promise<CardDesign> {
+  return (await getCardDesignRecord(businessId)).design
+}
+
+/** `updated_at > created_at`, defensively: either column may be absent or unparseable. */
+function hasBeenEdited(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false
+  const record = row as { created_at?: unknown; updated_at?: unknown }
+  const created = Date.parse(String(record.created_at ?? ''))
+  const updated = Date.parse(String(record.updated_at ?? ''))
+  if (!Number.isFinite(created) || !Number.isFinite(updated)) return false
+  return updated > created
 }
 
 export type CardDesignPatch = Partial<CardDesign>

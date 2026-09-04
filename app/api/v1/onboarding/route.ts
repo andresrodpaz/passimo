@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { defineRoute } from '@/lib/api/handler'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
-import { DEFAULT_BRAND } from '@/lib/brand/kit'
+import { getCardDesignRecord } from '@/lib/wallet/card-design-store'
 import type { ChecklistFacts } from '@/lib/onboarding/checklist'
 
 export const runtime = 'nodejs'
@@ -59,6 +59,7 @@ export const GET = defineRoute(
       { count: teamMemberCount },
       { data: walletSettings },
       { data: brand },
+      cardDesign,
     ] = await Promise.all([
       admin
         .from('business_onboarding')
@@ -97,9 +98,18 @@ export const GET = defineRoute(
         .maybeSingle(),
       admin
         .from('businesses')
-        .select('logo_url, primary_color, accent_color, onboarding_completed_at')
+        .select('logo_url, onboarding_completed_at')
         .eq('id', businessId)
         .maybeSingle(),
+      /*
+       * Read through the store rather than counting a row here, so "has this
+       * merchant customised their card?" has one definition. The dashboard
+       * callout asks the same question of the same function through
+       * `GET /api/v1/wallet/design`, and two implementations of that would
+       * eventually disagree — leaving a merchant with a ticked checklist item
+       * beside a card still asking to be designed.
+       */
+      getCardDesignRecord(businessId),
     ])
 
     return {
@@ -121,32 +131,28 @@ export const GET = defineRoute(
           walletSettings?.proximity_enabled && walletSettings?.geofencing_enabled
         ),
         /*
-         * "Customised" means they touched it, which is a logo or a colour that is
-         * not the one signup wrote. Comparing against the seeded default is the
-         * only honest test — a merchant who happens to like our default black has
-         * still not personalised anything.
+         * The logo, and only the logo.
+         *
+         * This used to also accept "a colour that is not the platform default",
+         * which sounded like the honest test and was not: signup provisions a
+         * *trade-appropriate* palette, so a café is seeded brown and a gym is
+         * seeded near-black, and neither matches the platform default. Every
+         * merchant therefore arrived with this item already ticked — the row read
+         * "Add your logo and brand colours" with a line through it, on day one,
+         * to somebody who had uploaded nothing. A checklist that disagrees with
+         * the product is worse than no checklist.
+         *
+         * The logo is the right test because it is the one thing in this item a
+         * merchant genuinely has to do and that nothing can seed for them.
+         * Colour customisation has its own row now — "Customise your Wallet
+         * card" — which is judged on whether the design was actually edited.
          */
-        brandingCustomised: Boolean(
-          brand?.logo_url ||
-            (brand?.primary_color && brand.primary_color !== DEFAULT_PRIMARY) ||
-            (brand?.accent_color && brand.accent_color !== DEFAULT_ACCENT)
-        ),
+        brandingCustomised: Boolean(brand?.logo_url),
+        cardDesignCustomised: cardDesign.customised,
       },
     }
   }
 )
-
-/*
- * The defaults `passimo_provision_business` writes at signup.
- *
- * Read from the Brand Kit rather than restated, because the whole point of this
- * comparison is "is this still the value we wrote?" — and two literals that are
- * supposed to be equal are two literals that eventually are not. If the brand
- * default changes, `brandingCustomised` must move with it or every existing
- * merchant is suddenly reported as having personalised their brand.
- */
-const DEFAULT_PRIMARY = DEFAULT_BRAND.primaryColor
-const DEFAULT_ACCENT = DEFAULT_BRAND.accentColor
 
 const patchSchema = z.object({
   businessId: z.string().uuid(),

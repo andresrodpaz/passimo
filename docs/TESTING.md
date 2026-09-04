@@ -13,18 +13,23 @@ pnpm test:integration # real PostgreSQL
 pnpm test:e2e         # Playwright, both viewports
 ```
 
-Current state: **634 unit tests (26 files), 71 integration tests.** Typecheck and
-lint are clean; both were re-run against the tree as it stands.
+Current state, all four run against this tree on 2026-09-04:
 
-The end-to-end suite is **written but was not run in the most recent session** —
-it needs `pnpm build` followed by `pnpm start`, which was not performed. Treat its
-last known result as unverified rather than passing.
+| Suite | Result |
+| --- | --- |
+| Unit — `pnpm test` | **667 passed, 27 files** |
+| Integration — `pnpm test:integration` | **82 passed, 5 files** |
+| End-to-end — `pnpm test:e2e` | **179 passed, 1 skipped**, both viewports, against a production build and a live database |
+| `pnpm typecheck`, `pnpm lint` | Clean |
+
+The single skip is `wallet-card-designer.spec.ts`'s mobile-only assertion under
+the desktop projection, which is the correct outcome rather than a gap.
 
 ---
 
 ## 1. Unit — `tests/unit/`, `vitest.config.ts`
 
-Pure logic. No database, no network, no browser. 26 files.
+Pure logic. No database, no network, no browser. 27 files.
 
 The rule that keeps it useful: **it must run with nothing but Node.** A unit suite
 that needs a database running is a unit suite people stop running, and then stop
@@ -127,6 +132,8 @@ screens on a desktop, and the two have different failure modes.
 | `merchant-journey.spec.ts` | The same journey through the API, twelve steps deep, asserting state |
 | `counter.spec.ts` | PWA manifest, service worker, offline page, camera permissions policy |
 | `commerce.spec.ts` | Pricing page, gift card shop, billing degradation without Stripe |
+| `wallet-card-designer.spec.ts` | Can a merchant *find* the card designer? Sidebar, dashboard callout and checklist each in one click; both wallet previews present and labelled as previews; template applied → saved → reloaded → still there; no horizontal overflow on a phone; the Spanish render with no English left behind |
+| `demo-plans.spec.ts` | The public pricing tiers and the demo environment's plan states |
 
 Most of the suite runs **unseeded and unauthenticated**, deliberately: it asserts
 what is true of *any* deployment rather than of a fixture. The tests that need a
@@ -134,11 +141,21 @@ merchant create one through the public signup endpoint and skip with a stated
 reason when there is no database. A suite that quietly asserts nothing is worse
 than one that says it could not.
 
-### Two things worth knowing before adding tests here
+### Three things worth knowing before adding tests here
 
-**Signup is rate limited** to 8 attempts per five minutes per IP. That is a
-security control, not a test inconvenience, so `onboarding.spec.ts` runs serially
-and shares one merchant across its three tests rather than creating three.
+**Auth is rate limited** to 8 requests per five minutes per IP, counting signups
+*and* sign-ins together. That is a security control, not a test inconvenience.
+
+Two consequences, both learned the hard way:
+
+- Specs that need a merchant run serially and share one, rather than creating one
+  per test — `onboarding.spec.ts` does this.
+- Sharing the merchant is not enough on its own. `wallet-card-designer.spec.ts`
+  originally signed in per test with one shared account, which still spent eight
+  auth requests; it passed alone and failed inside the full suite, reporting a
+  product bug that was not there. It now authenticates once in `beforeAll` and
+  replays the session cookies into each test's context. **Prefer that pattern for
+  any new spec that needs a session.**
 
 **The suite should run against `pnpm dev` too.** That means selectors have to
 tolerate Next.js's injected dev-tools button — hence `{ name: 'Next', exact: true }`

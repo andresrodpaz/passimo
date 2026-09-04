@@ -189,6 +189,42 @@ export function CardDesigner({
     program.goal !== null &&
     program.goal > MAX_RENDERABLE_STAMPS
 
+  /*
+   * Save and revert, declared once and rendered in two places.
+   *
+   * On a desktop this belongs under the preview, which is sticky, so it is
+   * always on screen. On a phone the preview column comes *first* (`order-1`,
+   * because a merchant should see what they are editing before the controls) —
+   * which put Save above every control, so after scrolling through templates,
+   * colours and toggles the only way to save was to scroll all the way back up.
+   * The mobile copy is therefore a sticky bar at the bottom of the editor
+   * instead, and only the placement differs: this is one element used twice, not
+   * two implementations to keep in step.
+   */
+  const actions = !readOnly ? (
+    <div className="flex gap-2">
+      <Button
+        type="button"
+        className="flex-1"
+        disabled={!dirty || saving}
+        onClick={() => onSave(draft)}
+      >
+        {saving ? t('common.saving') : t('cardDesign.save')}
+      </Button>
+      {dirty && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={t('common.cancel')}
+          onClick={() => setDraft(saved)}
+        >
+          <RotateCcw className="size-4" aria-hidden />
+        </Button>
+      )}
+    </div>
+  ) : null
+
   return (
     <div className={cn('grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]', className)}>
       {/*
@@ -448,31 +484,26 @@ export function CardDesigner({
             {t('cardDesign.preview.disclaimer')}
           </p>
 
-          {!readOnly && (
-            <div className="mt-4 flex gap-2">
-              <Button
-                type="button"
-                className="flex-1"
-                disabled={!dirty || saving}
-                onClick={() => onSave(draft)}
-              >
-                {saving ? t('common.saving') : t('cardDesign.save')}
-              </Button>
-              {dirty && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label={t('common.cancel')}
-                  onClick={() => setDraft(saved)}
-                >
-                  <RotateCcw className="size-4" aria-hidden />
-                </Button>
-              )}
-            </div>
-          )}
+          {/* Desktop only; the phone gets the sticky bar below the controls. */}
+          {actions && <div className="mt-4 hidden lg:block">{actions}</div>}
         </div>
       </div>
+
+      {/*
+        The phone's save bar.
+
+        `order-3` puts it after the controls, and `sticky bottom-4` keeps it on
+        screen while the merchant works down the editor. It renders whether or
+        not there are changes — a Save button that appears only once you have
+        edited something is a Save button nobody trusts is there.
+      */}
+      {actions && (
+        <div className="order-3 sticky bottom-4 z-10 lg:hidden">
+          <div className="rounded-xl border bg-background/95 p-2 shadow-lg backdrop-blur">
+            {actions}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -502,7 +533,10 @@ function Templates({
   const { t } = useI18n()
 
   return (
-    <section>
+    // `id` so the dashboard callout's "Browse templates" link lands on the
+    // gallery rather than the top of a long editor. `scroll-mt` keeps the
+    // heading clear of the sticky dashboard header.
+    <section id="templates" className="scroll-mt-24">
       <h3 className="text-sm font-semibold">{t('cardDesign.templates.title')}</h3>
       <p className="mb-3 text-xs text-muted-foreground">{t('cardDesign.templates.subtitle')}</p>
 

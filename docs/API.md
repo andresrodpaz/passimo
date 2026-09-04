@@ -361,11 +361,16 @@ has no reader whose cookie could answer that question.
 | `GET` | `/onboarding?businessId=` | `settings:read` — checklist facts and whether it was dismissed |
 | `PATCH` | `/onboarding` | `settings:write` — `checklistDismissed`, `lastStep` |
 
-`GET` returns *facts*, not a verdict: six counts plus two booleans. Which items
+`GET` returns *facts*, not a verdict: four counts plus three booleans. Which items
 are shown depends on the plan, and the plan is already resolved on the client, so
 `resolveChecklist()` decides in one pure, tested function rather than half here
 and half there. Completion is derived from those counts and never stored — a
 stored flag drifts the moment a merchant undoes the thing.
+
+`cardDesignCustomised` is read through `getCardDesignRecord()`, the same function
+behind `customised` on `GET /wallet/design`, so the ticked checklist row and the
+dashboard callout cannot give a merchant two different answers about the same
+card.
 
 ### Notifications
 
@@ -568,6 +573,38 @@ their locations with resolved geofences, and the template gallery.
 Provider status is deliberately part of the response. A merchant whose Apple certificate
 has not been installed should see *"Apple Wallet — not configured, missing
 `APPLE_SIGNING_CERTIFICATE_PATH`"*, not a toggle that silently does nothing.
+
+### Card design
+
+```
+GET   /wallet/design?businessId=…
+PATCH /wallet/design       { businessId, backgroundColor?, progressStyle?, … }
+POST  /wallet/design       { businessId, template }     → applies a template
+```
+
+Serves `/dashboard/wallet/design`. See `docs/BRAND_AND_CARD_DESIGN.md` §2 for the screen
+and §4 for the model.
+
+`GET` returns everything the designer needs in one round trip:
+
+| Field | Why it travels with the design |
+| --- | --- |
+| `design` | The saved row, or the defaults when there is no row — no caller handles an "unconfigured" state |
+| `customised` | Whether the merchant has *edited* the card since it was created (`updated_at > created_at`). The dashboard callout uses it to say "your card is ready to customise" to a new merchant and "change your card" to a returning one. Row-exists cannot answer this: onboarding writes a seeded design for everybody. |
+| `brand` | The Brand Kit the design inherits from, so the preview resolves without a second request |
+| `program` | The merchant's real goal, units and reward, so the preview shows *their* numbers rather than "8 points" |
+| `locationName` | The default store, for the card's location row |
+| `providers` | Provider status again, so the screen can say "this is a preview, no pass issues yet" honestly rather than assuming |
+
+`PATCH` is partial — send only what changed. A colour set to `null` clears the override
+and returns the card to the brand colour, which is a different operation from omitting
+it. `POST` is a separate verb because it is a different intent: *"start me over from this
+template"*. It preserves the merchant's own copy and logo, so clicking through templates
+to compare them cannot lose the sentence they wrote on the back.
+
+Every write on this route queues a pass refresh across the business. Unlike the Brand
+Kit, where a phone number can change without repainting anything, there is nothing in
+this table a customer does not see.
 
 ### Campaigns
 

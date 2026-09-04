@@ -195,8 +195,13 @@ export const en = {
       goalPoints: 'How many points to earn it?',
       goalPointsHint:
         'Roughly one point per unit spent, so {goal} points is a customer who has spent that much with you.',
+      /*
+       * Names the destination. It used to say "in the card designer", which is
+       * true and useless — there was no way to find the card designer. Now it
+       * reads as directions.
+       */
       moreLater:
-        'Templates, typography, the back of the card and everything it shows are in the card designer, whenever you want them.',
+        'Templates, typography, the back of the card and everything it shows live in Your card → Card design in your dashboard, whenever you want them.',
       activate: 'Activate the card',
     },
     ready: {
@@ -219,7 +224,7 @@ export const en = {
       next: {
         location: 'Add your address so cards show where to find you',
         campaigns: 'Turn on a campaign for your trade',
-        design: 'Fine-tune the card in the designer',
+        design: 'Customise your Wallet card',
       },
       openScanner: 'Start accepting customers',
       goToDashboard: 'Explore my dashboard',
@@ -325,6 +330,16 @@ export const en = {
       sampleDataNote: 'Sample data, real interface. No figures on this page describe real usage.',
       previewDisclaimer:
         'A preview of the design. The pass itself is issued by Apple and Google.',
+      /*
+       * The demo's own call to action.
+       *
+       * Names the next step, not the product: somebody who has just watched
+       * the card follow their colour choice wants to make one, and "create
+       * your loyalty program" is that sentence. The demo needs no account, so
+       * this is the first point at which one is mentioned.
+       */
+      ctaPrimary: 'Create your loyalty program',
+      ctaNote: 'No account needed to play with the demo above.',
       customiseTrade: 'Try another trade',
       customiseColour: 'Try another colour',
       tierLabel: 'Tier',
@@ -593,6 +608,7 @@ export const en = {
     nav: {
       today: 'Today',
       sell: 'Sell',
+      card: 'Your card',
       grow: 'Grow',
       understand: 'Understand',
       configure: 'Configure',
@@ -609,6 +625,15 @@ export const en = {
       analytics: 'Analytics',
       insights: 'AI insights',
       locations: 'Locations',
+      /*
+       * "Card design", not "Wallet Card Designer" or "Pass configuration".
+       *
+       * A merchant looking for where to change their loyalty card scans this
+       * list for the word *card*. Under the "Your card" heading this is the
+       * first thing they read, which is the entire fix for a feature that
+       * shipped complete and could not be found.
+       */
+      walletCard: 'Card design',
       wallet: 'Wallet & proximity',
       settings: 'Settings',
       billing: 'Plan & billing',
@@ -843,7 +868,6 @@ export const en = {
       rewardBody: 'You have a reward waiting at {location}.',
     },
     tabs: {
-      design: 'Card design',
       brand: 'Brand',
       behaviour: 'Notifications',
       settings: 'Settings',
@@ -1214,10 +1238,33 @@ export const en = {
   cardDesign: {
     title: 'Card design',
     subtitle: 'How your loyalty card looks in your customers’ wallets.',
-    tabDesign: 'Design',
-    tabBehaviour: 'Behaviour',
+
+    /*
+     * The heading on `/dashboard/wallet/design`.
+     *
+     * Says the two brand names on purpose. "Card design" alone is what a
+     * merchant searches for; "Apple Wallet and Google Wallet" is what makes
+     * them certain they are in the right place, because that is where the
+     * thing they are designing ends up.
+     */
+    pageTitle: 'Your Wallet card',
+    pageSubtitle:
+      'Design the digital loyalty card your customers will save to Apple Wallet and Google Wallet. Every change shows in the preview straight away.',
+    noAccess: 'You do not have access to the card',
+    noAccessBody:
+      'Your role cannot see or change the Wallet card. An owner or manager can open it for you, or change your role in Settings.',
+
+    related: {
+      title: 'Related',
+      brandKit: 'Brand kit',
+      brandKitBody:
+        'Your logo, colours and contact details. The card starts from these — change them once and everything follows.',
+      proximity: 'Wallet & proximity',
+      proximityBody:
+        'When the card notifies customers, how often, and what the lock-screen message says.',
+    },
+
     designHint: 'Colours, logo and layout. Changes appear in the preview instantly.',
-    behaviourHint: 'When the card notifies your customers, and how often.',
 
     /**
      * The hero/strip image.
@@ -1344,6 +1391,26 @@ export const en = {
     saved: 'Design saved',
     saveFailed: 'We could not save your design. Please try again.',
     unsaved: 'Unsaved changes',
+  },
+
+  /**
+   * "Your Wallet card" — the callout that leads into the designer.
+   *
+   * Two versions of every line, because the two merchants reading it are in
+   * different situations: one has never opened the designer and needs to be
+   * told the card is theirs to change, the other did it last month and needs a
+   * short way back in. Asking somebody to "get started" on something they have
+   * finished is how a dashboard panel becomes wallpaper.
+   */
+  walletCard: {
+    calloutTitle: 'Your Wallet card',
+    calloutBody: 'This is what your customers carry. Change anything you like.',
+    calloutFreshBody:
+      'Your card is ready to customise — your colours, your logo, and what it shows.',
+    calloutFreshBadge: 'Not customised yet',
+    calloutCta: 'Customise card',
+    calloutFreshCta: 'Design your card',
+    calloutTemplates: 'Browse templates',
   },
 
   /**
@@ -2856,8 +2923,16 @@ export const en = {
       locationsBody: 'Per-site opening hours, geofences and reporting.',
       proximity: 'Switch on proximity notifications',
       proximityBody: 'Your card comes back to customers when they walk past the door.',
-      branding: 'Personalise the card',
-      brandingBody: 'Your logo, your colours, your lock-screen wording.',
+      cardDesign: 'Customise your Wallet card',
+      cardDesignBody: 'Pick a template, set your colours, choose what the card shows.',
+      /*
+       * Reworded to stop competing with the item above it. This used to be
+       * called "Personalise the card" and pointed at Settings — so the one row
+       * on the dashboard that mentioned the card sent merchants to the screen
+       * that does not hold it.
+       */
+      branding: 'Add your logo',
+      brandingBody: 'One upload. It appears on your card, your join page and your emails.',
       firstScan: 'Serve your first customer',
       firstScanBody: 'Open the scanner and check somebody in — it takes about a minute.',
       campaign: 'Send your first campaign',

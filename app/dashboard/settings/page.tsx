@@ -33,6 +33,7 @@ import { useWorkspace } from '@/lib/client/workspace'
 import { AsyncBoundary } from '@/components/states'
 import { useClientValue } from '@/lib/client/hooks'
 import { CardPreview } from '@/components/wallet/card-preview'
+import { CARD_DESIGNER_HREF } from '@/components/wallet/card-callout'
 import { PlatformSwitch } from '@/components/wallet/platform-switch'
 import type { CardDesignResponse } from '@/components/wallet/design-types'
 import { resolveCardDesign } from '@/lib/wallet/card-design'
@@ -551,8 +552,12 @@ function CardSummary({ settings }: { settings: SettingsResponse }) {
           ))}
         </ul>
 
+        {/* Straight to the editor. This pointed at `/dashboard/wallet` and
+            relied on the designer happening to be that screen's first tab —
+            which stopped being true, and was never a link a merchant could
+            trust. */}
         <Button asChild className="mt-5 gap-2">
-          <Link href="/dashboard/wallet">
+          <Link href={CARD_DESIGNER_HREF}>
             <Palette className="size-4" aria-hidden />
             {t('settings.openCardDesigner')}
           </Link>

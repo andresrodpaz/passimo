@@ -24,10 +24,19 @@ export function CardDesignPanel({
   businessId,
   canWrite,
   uploadsEnabled,
+  withHeading = true,
 }: {
   businessId: string
   canWrite: boolean
   uploadsEnabled: boolean
+  /**
+   * Renders the panel's own title and hint.
+   *
+   * False on `/dashboard/wallet/design`, where the page already carries the
+   * heading — two titles on one screen is how a merchant starts wondering
+   * whether they are looking at two different things.
+   */
+  withHeading?: boolean
 }) {
   const { t } = useI18n()
   const key = `/api/v1/wallet/design${query({ businessId })}`
@@ -93,12 +102,14 @@ export function CardDesignPanel({
 
         return (
           <div className="space-y-5">
-            <div>
-              <h2 className="text-lg font-semibold">{t('cardDesign.title')}</h2>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                {t('cardDesign.designHint')}
-              </p>
-            </div>
+            {withHeading && (
+              <div>
+                <h2 className="text-lg font-semibold">{t('cardDesign.title')}</h2>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  {t('cardDesign.designHint')}
+                </p>
+              </div>
+            )}
 
             {/*
               Said once, here, rather than under every preview. The design is

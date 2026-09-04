@@ -116,7 +116,8 @@ Then:
 | `/` | — | The landing page, live demo and pricing |
 | `/dashboard` | `growth@demo.com` | Customers, campaigns, analytics with real data |
 | `/dashboard/locations` | `business@demo.com` | Four stores with geofences and split-shift hours |
-| `/dashboard/wallet` | `growth@demo.com` | Settings, campaigns, rules, analytics, templates |
+| `/dashboard/wallet/design` | `growth@demo.com` | The card designer — templates, colours, layout, Apple and Google previews |
+| `/dashboard/wallet` | `growth@demo.com` | Brand kit, notifications, campaigns, rules, analytics, templates |
 | `/pos` | any merchant | The counter scanner |
 | `/admin` | `admin@demo.com` | Every business, MRR, impersonation |
 

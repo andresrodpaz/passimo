@@ -28,7 +28,95 @@ parallel implementation is a preview that lies the first time the two drift.
 
 ---
 
-## 2. Brand Kit
+## 2. Where the designer lives, and how a merchant finds it
+
+**Status: implemented.** This section exists because the answer used to be *"they
+don't"*.
+
+Everything in §3 through §7 shipped complete — the editor, eleven templates,
+Apple and Google previews rendering through the real resolver, a working
+endpoint, a migration, and passing tests — and it was reachable only as the
+**first tab** of `/dashboard/wallet`, a screen the sidebar labelled *"Wallet &
+proximity"* under a group called *"Configure"*. Nothing in the navigation, the
+dashboard, or the first-steps checklist contained the word **card**. A merchant
+who wanted to change their loyalty card had no way to find out where to click,
+and a feature nobody can reach is not shipped however good the editor is.
+
+### The route
+
+| | |
+| --- | --- |
+| **Route** | `/dashboard/wallet/design` |
+| **Page** | `app/dashboard/wallet/design/page.tsx` |
+| **Heading** | *Your Wallet card* — "Design the digital loyalty card your customers will save to Apple Wallet and Google Wallet." |
+| **Editor** | `components/wallet/design-panel.tsx` → `components/wallet/card-designer.tsx` |
+| **Endpoint** | `GET`/`PATCH`/`POST /api/v1/wallet/design` |
+| **Permission** | `wallet:read` to open, `wallet:write` to save |
+| **Plan gate** | **None.** Included on every purchasable plan, from Starter at €5/month. There is no free plan. |
+
+The editor has exactly **one** mount point. The designer was not copied to the
+new route — it was moved, and the old tab is gone. Two URLs rendering the same
+editor is the duplication that made the original problem hard to see.
+
+### The five ways in
+
+| Entry point | Where | Clicks from sign-in |
+| --- | --- | --- |
+| **Sidebar** — *Your card → Card design* | `lib/dashboard/navigation.ts` | 1 |
+| **Dashboard callout** — *Your Wallet card*, with a live preview of the real design | `components/wallet/card-callout.tsx`, on `app/dashboard/page.tsx` | 1 |
+| **First-steps checklist** — *Customise your Wallet card* | `lib/onboarding/checklist.ts` | 1 |
+| **Wallet screen** — the same callout, above the tabs | `app/dashboard/wallet/page.tsx` | 2 |
+| **End of onboarding** — *Customise your Wallet card* in "When you have a minute" | `app/onboarding/page.tsx` | 1 |
+| **Settings → Card** — *Open card designer* | `app/dashboard/settings/page.tsx` | 3 |
+
+`CARD_DESIGNER_HREF` is exported from `components/wallet/card-callout.tsx` and
+used by every one of these, so the route is written once.
+
+### The callout, and the one fact it needs from the server
+
+`WalletCardCallout` shows the merchant's **real** saved design, resolved through
+`resolveCardDesign`. A generic illustration would have been easier and would have
+taught the merchant nothing; the point of putting it on the dashboard is that
+they recognise the card as theirs.
+
+Its copy changes on `customised`, returned by `GET /api/v1/wallet/design` and
+derived by `getCardDesignRecord`:
+
+```
+customised = a design row exists AND updated_at > created_at
+```
+
+Not *"does a row exist"*: onboarding writes a full, trade-seeded design when the
+merchant activates their card, so every account has a row from day one and that
+test would always answer yes. Not *"does it differ from the platform default"*
+either, because that seed is per-trade — a café's card legitimately arrives
+already brown and stamped. `updated_at > created_at` is exactly *"this has been
+edited since it was first written"*, which is the question being asked.
+
+The same function feeds the checklist's `cardDesignCustomised` fact, so the
+ticked row and the dashboard callout can never disagree.
+
+### Naming
+
+The navigation says **Card design** (`Diseño de la tarjeta`), not *"Pass
+configuration"* or *"Wallet Card Designer"*. A merchant scans the sidebar for the
+word *card*; under a *"Your card"* group heading that is the first word they read.
+
+### What guards it
+
+`tests/unit/dashboard-navigation.test.ts` asserts reachability rather than
+rendering, because rendering was never the broken part: the designer has a
+sidebar entry, its label contains *card* in both dictionaries, it sits above the
+proximity screen, it carries no plan gate, every role with `wallet:read` sees it,
+and every sidebar href resolves to a `page.tsx` that exists.
+
+`tests/e2e/wallet-card-designer.spec.ts` walks the journey — sign in, read the
+dashboard, click the obvious thing, change a template, save, reload, and check
+the change survived.
+
+---
+
+## 3. Brand Kit
 
 **Status: implemented.**
 
@@ -85,7 +173,7 @@ legible wallet card and an illegible join page.
 
 ---
 
-## 3. Card design
+## 4. Card design
 
 **Status: implemented.** Stored in `wallet_card_designs`, one row per business.
 A **missing row is the default design**, not an error.
@@ -94,9 +182,9 @@ A **missing row is the default design**, not an error.
 
 | Field | Values | Notes |
 | --- | --- | --- |
-| `template` | see §5 | A set of starting values, not a mode |
+| `template` | see §6 | A set of starting values, not a mode |
 | `cardStyle` | `solid`, `gradient`, `duotone`, `frosted` | Surface treatment |
-| `progressStyle` | `auto`, `bar`, `stamps`, `points`, `none` | See §4 |
+| `progressStyle` | `auto`, `bar`, `stamps`, `points`, `none` | See §5 |
 | `typography` | `system`, `rounded`, `serif`, `mono` | |
 | `backgroundColor`, `foregroundColor`, `accentColor` | hex or null | Null means *inherit the brand* |
 | `logoUrl`, `heroImageUrl` | URL or null | Logo falls back to the brand's |
@@ -135,7 +223,7 @@ learning what contrast means.
 
 ---
 
-## 4. Progress rendering
+## 5. Progress rendering
 
 `progressStyle: 'auto'` follows the program, which is right almost always: a
 stamp card gets stamps, a points program gets a bar.
@@ -159,7 +247,7 @@ every localised stamp card as a points program and quietly stop drawing stamps.
 
 ---
 
-## 5. Templates
+## 6. Templates
 
 `lib/wallet/card-templates.ts`. The brief was "templates should feel genuinely
 different — do not create ten copies of the same design". **A palette swap is not
@@ -179,7 +267,7 @@ designer cannot produce is a promise broken on the merchant's first afternoon.
 
 ---
 
-## 6. Previews
+## 7. Previews
 
 `components/wallet/card-preview.tsx`, with `components/wallet/platform-switch.tsx`
 toggling between the two platform framings.
@@ -193,23 +281,25 @@ representation, customer information, loyalty balance, rewards and branding.
 
 **It is labelled as a preview and does not claim to be a real provider pass.**
 That matters for a reason beyond honesty: without Apple and Google credentials
-(§8) no real pass can be issued at all, and a preview implying otherwise would
+(§9) no real pass can be issued at all, and a preview implying otherwise would
 misrepresent what the deployment can do.
 
-Previews appear in three places, all sharing the component:
+Previews appear in five places, all sharing the component:
 
 | Where | Purpose |
 | --- | --- |
+| `app/dashboard/wallet/design/page.tsx` | The designer (§2) |
+| `app/dashboard/page.tsx` | The dashboard callout — the merchant's real card, as a way in |
+| `app/dashboard/settings/page.tsx` | The Settings → Card summary |
 | `app/onboarding/page.tsx` | The card being built, live, during setup |
-| `app/dashboard/wallet/page.tsx` | The designer |
-| `components/landing/*` | The public customisation demo |
+| `components/landing/*` | The public customisation demo, which uses no camera |
 
 Before a business exists, `placeholderBrandKit(name)` supplies a neutral,
 complete kit so the preview never renders half-resolved.
 
 ---
 
-## 7. Localisation of the card face
+## 8. Localisation of the card face
 
 **Status: implemented.**
 
@@ -236,21 +326,21 @@ accessibility label wrong on every Android phone that installed the card.
 
 ---
 
-## 8. What is not finished
+## 9. What is not finished
 
 | Item | Status |
 | --- | --- |
 | Issuing a real Apple `.pkpass` | **Credential-dependent.** The builder and its `pass.json` structure are complete and unit-tested; no Apple certificates exist on this deployment. `appleWalletConfigured()` reports false and the UI says so. |
 | Issuing a real Google pass | **Credential-dependent.** Class and object builders are complete and unit-tested; no issuer account exists. |
 | Logo upload | Implemented via `lib/brand/logo.ts` and `lib/storage/*` (`local` and `s3` drivers). The `s3` driver is untested against a real bucket. |
-| Hero/strip image | **Implemented.** Upload control in the designer, rendered in both previews, consumed by both providers (Apple `strip.png`, Google `heroImage`). See §11. |
-| `secondaryColor` | **Implemented.** Drives the far stop of a `gradient` card. See §12. |
+| Hero/strip image | **Implemented.** Upload control in the designer, rendered in both previews, consumed by both providers (Apple `strip.png`, Google `heroImage`). See §12. |
+| `secondaryColor` | **Implemented.** Drives the far stop of a `gradient` card. See §13. |
 | Per-location card variants | **Not implemented.** One design per business — the primary key on `wallet_card_designs` is `business_id`. |
 | Cover image (`coverUrl`) | **Stored and editable, renders nowhere.** The one remaining half-wired brand field. |
 
 ---
 
-## 9. Tests
+## 10. Tests
 
 | Suite | Covers |
 | --- | --- |
@@ -258,6 +348,9 @@ accessibility label wrong on every Android phone that installed the card.
 | `tests/unit/wallet-pass-build.test.ts` | Apple `pass.json` and Google class/object structure, the location cap and `maxDistance`, locale-correct dates, and a guard asserting no English phrase appears on a Spanish pass |
 | `tests/unit/email-shell.test.ts` | The email shell agreeing with the card on text colour, `lang`, translated footer, HTML escaping |
 | `tests/unit/landing-demo.test.ts` | The demo state machine, and that all 24 trade/palette combinations resolve to a legible card |
+| `tests/unit/dashboard-navigation.test.ts` | That the designer is *reachable* — sidebar entry, label, ordering, no plan gate, every role with `wallet:read`, and every nav href resolving to a real page (§2) |
+| `tests/unit/onboarding-checklist.test.ts` | That "Customise your Wallet card" is the checklist's second row, points at the designer, and is offered on every purchasable plan |
+| `tests/e2e/wallet-card-designer.spec.ts` | The merchant journey: sidebar → designer, dashboard callout → designer, both wallet previews present and labelled, template applied, saved, reloaded and still there, and no sideways scroll on a phone |
 
 Two assertions are structural rather than behavioural, and both exist because the
 bug they guard is a *duplicate* — something no test of any single function can
@@ -271,13 +364,13 @@ see:
   produced white text on the installed pass and dark text on the join page
   advertising it.
 - **The upload ceiling equals the embed ceiling.** `wallet-pass-build.test.ts`
-  asserts `MAX_LOGO_BYTES === MAX_PASS_IMAGE_BYTES`. See §10.
+  asserts `MAX_LOGO_BYTES === MAX_PASS_IMAGE_BYTES`. See §11.
 
 Run: `pnpm test`.
 
 ---
 
-## 10. The hero/banner image
+## 11. The hero/banner image
 
 **Status: implemented.**
 
@@ -319,7 +412,7 @@ file picker, in the merchant's language, instead of never. Pinned by a test.
 
 ---
 
-## 11. The brand's second colour
+## 12. The brand's second colour
 
 **Status: implemented.**
 
@@ -349,7 +442,7 @@ Two deliberate limits:
 
 ---
 
-## 12. Related
+## 13. Related
 
 - [`WALLET_PROXIMITY.md`](WALLET_PROXIMITY.md) — geofencing, campaigns, the rule engine
 - [`INTERNATIONALIZATION.md`](INTERNATIONALIZATION.md) — how "never mix languages" is enforced
