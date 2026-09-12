@@ -4,6 +4,7 @@ import { updateCustomerSchema } from '@/lib/api/schemas'
 import { getCustomerProfile } from '@/lib/customers/service'
 import { getCustomerLoyalty } from '@/lib/loyalty/engine'
 import { getDb } from '@/lib/db'
+import { listBusinessTags, setCustomerTags } from '@/lib/customers/tags'
 import { recordAudit } from '@/lib/audit'
 import { unprocessable } from '@/lib/errors'
 import { scheduleWalletSync } from '@/lib/wallet/sync'
@@ -24,11 +25,19 @@ export const GET = defineRoute(
     rateLimit: 'dashboard',
   },
   async ({ params, business }) => {
-    const [profile, loyalty] = await Promise.all([
+    /*
+     * The business's existing tag vocabulary travels with the profile.
+     *
+     * One round trip rather than two: the tag editor needs it the moment it
+     * renders, and re-typing "wholesale" slightly differently is how a tag list
+     * stops being worth filtering by.
+     */
+    const [profile, loyalty, tagSuggestions] = await Promise.all([
       getCustomerProfile(business.businessId, params.id),
       getCustomerLoyalty(business.businessId, params.id),
+      listBusinessTags(business.businessId),
     ])
-    return { ...profile, loyalty }
+    return { ...profile, loyalty, tagSuggestions }
   }
 )
 
@@ -68,15 +77,28 @@ export const PATCH = defineRoute(
       patch.consent_source = 'staff'
     }
 
-    if (Object.keys(patch).length === 0) throw unprocessable('Nothing to update')
+    /*
+      * Tags are rows in `customer_tags`, not a column, so they are applied
+      * separately — and a request carrying only tags is a legitimate update,
+      * which is why the emptiness check counts them.
+      */
+    if (Object.keys(patch).length === 0 && body.tags === undefined) {
+      throw unprocessable('Nothing to update')
+    }
 
-    const { error } = await admin
-      .from('customers')
-      .update(patch)
-      .eq('id', params.id)
-      .eq('business_id', business.businessId)
+    if (Object.keys(patch).length > 0) {
+      const { error } = await admin
+        .from('customers')
+        .update(patch)
+        .eq('id', params.id)
+        .eq('business_id', business.businessId)
 
-    if (error) throw unprocessable(error.message)
+      if (error) throw unprocessable(error.message)
+    }
+
+    if (body.tags !== undefined) {
+      await setCustomerTags(business.businessId, params.id, body.tags)
+    }
 
     await recordAudit({
       businessId: business.businessId,
@@ -84,7 +106,7 @@ export const PATCH = defineRoute(
       action: 'customer.updated',
       resourceType: 'customer',
       resourceId: params.id,
-      summary: `Updated ${Object.keys(patch).join(', ')}`,
+      summary: `Updated ${[...Object.keys(patch), ...(body.tags === undefined ? [] : ['tags'])].join(', ')}`,
       request,
     })
 

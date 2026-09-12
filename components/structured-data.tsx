@@ -59,8 +59,9 @@ export function StructuredData({ locale }: { locale: Locale }) {
       publisher: { '@id': `${base}/#organization` },
       /*
        * `AggregateOffer` rather than a list of `Offer`s: it is what lets a result
-       * render "from $5" honestly, which is the number a café owner is deciding
-       * on. `offerCount` and the bounds all come from the catalogue.
+       * render "from $29" honestly, which is the number a café owner is deciding
+       * on. `offerCount` and the bounds all come from the catalogue, so a pricing
+       * change moves the rich result with it or not at all.
        */
       offers: {
         '@type': 'AggregateOffer',

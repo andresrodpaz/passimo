@@ -17,6 +17,8 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/auth/password'
 import { sendTransactionalEmail } from '@/lib/messaging/transactional'
 import { env } from '@/lib/env'
 import { createTranslator } from '@/lib/i18n/translate'
+import { LEGAL_VERSION } from '@/lib/legal/documents'
+import { clientIp } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -34,6 +36,14 @@ const bodySchema = z.object({
   currency: z.string().length(3).optional(),
   locale: z.enum(['es', 'en']).optional(),
   referralCode: z.string().max(20).optional(),
+  /*
+   * Not `boolean` and not optional. A checkbox in the form is a suggestion —
+   * this endpoint is public and takes JSON, so the only place acceptance can
+   * actually be required is here. `z.literal(true)` makes `false` and a missing
+   * field both a 422, which is the correct answer to "create me an account
+   * without agreeing to the terms".
+   */
+  acceptedTerms: z.literal(true),
 })
 
 /**
@@ -93,6 +103,15 @@ export const POST = defineRoute(
         locale,
         support_email: body.email,
         referred_by_business_id: referrer?.data?.id ?? null,
+        /*
+         * Stored with the workspace rather than the user, because the terms
+         * bind the contracting party and a workspace can outlive the person
+         * who created it. `LEGAL_VERSION` names the text that was on screen,
+         * so a later revision can tell who has and has not seen it.
+         */
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: LEGAL_VERSION,
+        terms_accepted_ip: clientIp(request) ?? null,
       })
       .select('id, slug, name')
       .single()

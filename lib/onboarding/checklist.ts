@@ -110,12 +110,21 @@ export const CHECKLIST_ITEMS: readonly ChecklistItem[] = [
     href: '/dashboard/campaigns',
     feature: 'campaigns',
   },
+  /*
+   * Ungated on purpose.
+   *
+   * This item used to carry `feature: 'team_management'`, a flag the catalogue
+   * sold on the top tier and which nothing in the codebase ever checked — there
+   * is no invite endpoint and no team screen behind it, so the gate hid the
+   * checklist row from everybody who was not on Business and unlocked nothing
+   * for the people who were. The flag is gone from the catalogue; staff seats are
+   * governed by the `team_members` cap, which every plan has.
+   */
   {
     key: 'team',
     titleKey: 'checklist.items.team',
     bodyKey: 'checklist.items.teamBody',
     href: '/dashboard/settings',
-    feature: 'team_management',
   },
 ]
 

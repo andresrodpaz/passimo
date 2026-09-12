@@ -180,7 +180,7 @@ export function ReactivationBanner() {
 
   if (!entitlements || entitlements.effective_plan !== 'lapsed') return null
 
-  const price = formatCurrency(ENTRY_PLAN.monthlyPrice ?? 5, { currency: PLAN_CURRENCY })
+  const price = formatCurrency(ENTRY_PLAN.monthlyPrice ?? 0, { currency: PLAN_CURRENCY })
 
   return (
     <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center">

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Loader2, PauseCircle } from 'lucide-react'
 import { getJoinPageData, toPublicJoinData } from '@/lib/public/join'
 import { getLocale } from '@/lib/i18n/server'
 import { createTranslator } from '@/lib/i18n/translate'
@@ -79,6 +79,18 @@ export default async function JoinPage({ params }: Props) {
   const data = await getJoinPageData(businessSlug)
   if (!data) notFound()
 
+  /*
+   * A club with no active default program is paused, not missing — so this is
+   * not a 404. The business exists, its page is a real page, and the honest
+   * thing to show is that enrolment is closed right now.
+   *
+   * It previously fell through to the form with generic fallback copy
+   * ("collect 10 stamps and get a reward"), which advertised a program that was
+   * switched off. Rendered here rather than inside `JoinFlow` so the fact is
+   * settled server-side, like every other fact on this page.
+   */
+  if (!data.program) return <ClubUnavailable businessName={data.business.name} />
+
   // The tenant primary key stays on the server; see `toPublicJoinData`.
   const payload = toPublicJoinData(data)
 
@@ -98,6 +110,32 @@ function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center">
       <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    </main>
+  )
+}
+
+/**
+ * The club exists but is not taking members.
+ *
+ * Named for the person reading it: somebody who just scanned a sticker on a
+ * counter and needs to know it is not their phone's fault, and that asking at
+ * the counter is the thing to do. No form, because there is nothing to join.
+ */
+async function ClubUnavailable({ businessName }: { businessName: string }) {
+  const locale = await getLocale()
+  const t = createTranslator(locale)
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
+      <div className="w-full max-w-[390px] rounded-2xl border bg-card p-6 text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
+          <PauseCircle className="size-6 text-muted-foreground" aria-hidden />
+        </div>
+        <h1 className="mt-4 text-lg font-semibold">{t('join.unavailable')}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t('join.unavailableBody', { business: businessName })}
+        </p>
+      </div>
     </main>
   )
 }

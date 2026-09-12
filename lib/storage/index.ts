@@ -86,6 +86,17 @@ export const storageKeys = {
    */
   businessHero: (businessId: string, fingerprint: string, extension: string) =>
     `businesses/${businessId}/hero-${fingerprint}.${extension}`,
+  /**
+   * The social share image — the picture that appears when a merchant's join
+   * link is pasted into WhatsApp, Messenger or X.
+   *
+   * Content-fingerprinted like the other two, and for a sharper version of the
+   * same reason: link unfurlers cache aggressively and almost never re-fetch, so
+   * a fixed key means the first image a merchant ever uploaded is the one their
+   * customers keep seeing.
+   */
+  businessCover: (businessId: string, fingerprint: string, extension: string) =>
+    `businesses/${businessId}/cover-${fingerprint}.${extension}`,
   campaignImage: (businessId: string, campaignId: string, extension: string) =>
     `businesses/${businessId}/campaigns/${campaignId}.${extension}`,
   walletAsset: (businessId: string, name: string) =>

@@ -1,6 +1,6 @@
 import { defineRoute } from '@/lib/api/handler'
 import { positionReportSchema, walletEventSchema } from '@/lib/api/wallet-schemas'
-import { verifyToken } from '@/lib/crypto'
+import { verifyCardToken } from '@/lib/loyalty/card-token'
 import { forbidden } from '@/lib/errors'
 import { getDb } from '@/lib/db'
 import { recordWalletEvent } from '@/lib/wallet/events'
@@ -29,10 +29,10 @@ export const runtime = 'nodejs'
  * able to trigger a notification.
  */
 
-function customerFrom(token: string): string {
-  const payload = verifyToken<{ c: string }>('card', token)
-  if (!payload?.c) throw forbidden('This card link is invalid or has expired')
-  return payload.c
+async function customerFrom(token: string): Promise<string> {
+  const payload = await verifyCardToken(token)
+  if (!payload) throw forbidden('This card link is invalid or has expired')
+  return payload.customerId
 }
 
 async function businessFor(customerId: string): Promise<string | null> {
@@ -57,7 +57,7 @@ export const GET = defineRoute(
     rateLimit: 'publicRelaxed',
   },
   async ({ query }) => {
-    const customerId = customerFrom(query.token)
+    const customerId = await customerFrom(query.token)
     const businessId = await businessFor(customerId)
     if (!businessId) throw forbidden('This card is no longer active')
 
@@ -89,7 +89,7 @@ export const POST = defineRoute(
     rateLimit: 'proximity',
   },
   async ({ body }) => {
-    const customerId = customerFrom(body.token)
+    const customerId = await customerFrom(body.token)
     const businessId = await businessFor(customerId)
     if (!businessId) throw forbidden('This card is no longer active')
 
@@ -129,7 +129,7 @@ export const PUT = defineRoute(
     rateLimit: 'proximity',
   },
   async ({ body }) => {
-    const customerId = customerFrom(body.token)
+    const customerId = await customerFrom(body.token)
     const businessId = await businessFor(customerId)
     if (!businessId) throw forbidden('This card is no longer active')
 

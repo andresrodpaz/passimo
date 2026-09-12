@@ -30,11 +30,10 @@ provisioned account: a loyalty program, earning rules, a reward catalogue, ten
 saved segments and eight always-on automations.
 
 Or run `pnpm seed:demo` and sign in as `starter@demo.com` / `growth@demo.com` /
-`pro@demo.com` / `business@demo.com` — one account per paid plan, each with real
-customers, campaigns, geofences and analytics — plus `trial@demo.com` and
-`lapsed@demo.com` for the two lifecycle states no paid plan can reach, and
-`admin@passimo.demo` for the platform console. The password is `DEMO_PASSWORD`
-(default `PassimoDemo2026!`).
+`pro@demo.com` — one account per paid plan, each with real customers, campaigns,
+geofences and analytics — plus `trial@demo.com` and `lapsed@demo.com` for the two
+lifecycle states no paid plan can reach, and `admin@passimo.demo` for the platform
+console. The password is `DEMO_PASSWORD` (default `PassimoDemo2026!`).
 
 Every one of those credentials has been used to sign in against a production
 build, and every workspace exercised end to end:
@@ -129,15 +128,26 @@ credit.
 cross-business offers, with per-partnership traffic in both directions. No
 customer list is ever shared; directory reach is bucketed, never exact.
 
-**Billing.** Four paid tiers — Starter $5, Growth $19, Pro $49, Business $99 —
-defined in one isomorphic catalogue that the pricing page, the paywall and the
-API gate all read, so marketing can never promise what the API refuses. No free
-plan: a loyalty program that costs nothing never gets set up. A 14-day trial with
-everything unlocked, and a `lapsed` state that keeps every row readable while
-refusing writes, because nothing is ever deleted. Stripe Checkout and portal,
-live usage meters, and a hard/soft limit split that never turns away a customer
-standing at the counter.
-See [`docs/SUBSCRIPTIONS.md`](docs/SUBSCRIPTIONS.md).
+**Billing.** Three paid tiers — Starter $29, Growth $59, Pro $99 — defined in one
+isomorphic catalogue that the pricing page, the paywall and the API gate all read,
+so marketing can never promise what the API refuses. No free plan: a loyalty
+program that costs nothing never gets set up.
+
+Starter is the *complete* core product — wallet passes in both wallets, the card
+designer, the brand kit, the scanner, campaigns, automations, segments and a real
+AI allowance — because a merchant who cannot run their shop on the entry tier
+never reaches the second one. The higher tiers sell scale and advanced capability:
+multi-location, merchant-set geofencing, gift cards, cohort analytics, paid
+memberships, the partner network.
+
+A 14-day trial on Growth with no card, and a `lapsed` state that keeps every row
+readable while refusing writes, because nothing is ever deleted. Stripe Checkout
+and portal, provider-authoritative webhooks with real idempotency, four-stage
+dunning, live usage meters, and a hard/soft limit split that never turns away a
+customer standing at the counter.
+See [`docs/PRICING.md`](docs/PRICING.md),
+[`docs/SUBSCRIPTIONS.md`](docs/SUBSCRIPTIONS.md) and
+[`docs/BILLING.md`](docs/BILLING.md).
 
 **Platform.** Public REST API with scoped keys, signed outbound webhooks, and
 inbound commerce ingestion from Stripe, Square, Shopify, WooCommerce, SumUp,
@@ -281,7 +291,9 @@ Playwright on both viewports.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit and why
 - [`docs/WALLET_PROXIMITY.md`](docs/WALLET_PROXIMITY.md) — location-aware passes, geofencing, campaigns, the rule engine, privacy
 - [`docs/STORE_EXPERIENCE.md`](docs/STORE_EXPERIENCE.md) — the counter scanner, browser support, offline behaviour
+- [`docs/PRICING.md`](docs/PRICING.md) — what we charge, why, and the unit economics behind it
 - [`docs/SUBSCRIPTIONS.md`](docs/SUBSCRIPTIONS.md) — the plan catalogue and how feature gating works
+- [`docs/BILLING.md`](docs/BILLING.md) — Stripe, the webhook, failed payments and dunning
 - [`docs/INTERNATIONALIZATION.md`](docs/INTERNATIONALIZATION.md) — how "never mix languages" is enforced rather than intended
 - [`DEMO_CREDENTIALS.md`](DEMO_CREDENTIALS.md) — sign-in details per plan, a test script for each, the verified feature matrix
 - [`docs/DEMO_TESTING.md`](docs/DEMO_TESTING.md) — exercise every feature by hand, in the order a merchant meets them

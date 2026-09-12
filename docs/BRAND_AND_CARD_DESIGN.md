@@ -52,7 +52,7 @@ and a feature nobody can reach is not shipped however good the editor is.
 | **Editor** | `components/wallet/design-panel.tsx` → `components/wallet/card-designer.tsx` |
 | **Endpoint** | `GET`/`PATCH`/`POST /api/v1/wallet/design` |
 | **Permission** | `wallet:read` to open, `wallet:write` to save |
-| **Plan gate** | **None.** Included on every purchasable plan, from Starter at €5/month. There is no free plan. |
+| **Plan gate** | **None.** Included on every purchasable plan, from Starter at $29/month. There is no free plan. The card *is* the product; "change my logo" behind a paywall would make the entry tier a trial with a price on it. |
 
 The editor has exactly **one** mount point. The designer was not copied to the
 new route — it was moved, and the old tab is gone. Two URLs rendering the same

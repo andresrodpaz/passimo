@@ -5,17 +5,21 @@ import {
   FEATURE_LABEL_KEYS,
   LIMIT_LABEL_KEYS,
   PLANS,
+  PLAN_IDS,
   PLAN_ORDER,
   PUBLIC_PLANS,
+  RECOMMENDED_PLAN,
   TRIAL_EXPIRED_PLAN,
   TRIAL_PLAN,
   USAGE_METRICS,
   annualSaving,
+  annualSavingPercent,
   isPlanId,
   isPurchasablePlan,
   isUpgrade,
   lowestPlanWith,
   lowestPlanWithLimit,
+  nextPlanAfter,
   normalizePlanId,
   planRank,
   priceFor,
@@ -92,20 +96,55 @@ describe('plan catalogue', () => {
   })
 
   it('resolves the cheapest plan that unlocks a feature', () => {
+    /*
+     * The core loyalty product is on the entry tier. These six assertions are the
+     * commercial promise of Starter written as a test: a $29 café can brand its
+     * card, run campaigns, leave automations on, segment its list and use the AI
+     * — and if a future edit moves any of them up a tier, this fails rather than
+     * the pricing page quietly starting to lie.
+     */
     expect(lowestPlanWith('wallet_proximity')?.id).toBe('starter')
+    expect(lowestPlanWith('custom_branding')?.id).toBe('starter')
+    expect(lowestPlanWith('campaigns')?.id).toBe('starter')
+    expect(lowestPlanWith('automations')?.id).toBe('starter')
+    expect(lowestPlanWith('segments')?.id).toBe('starter')
+    expect(lowestPlanWith('ai')?.id).toBe('starter')
+
+    // Scale and advanced capability are what the higher tiers sell.
     expect(lowestPlanWith('geofencing')?.id).toBe('growth')
+    expect(lowestPlanWith('multi_location')?.id).toBe('growth')
     expect(lowestPlanWith('gift_cards')?.id).toBe('growth')
-    expect(lowestPlanWith('ai')?.id).toBe('pro')
-    expect(lowestPlanWith('coalition')?.id).toBe('business')
-    expect(lowestPlanWith('sso')?.id).toBe('business')
+    expect(lowestPlanWith('advanced_analytics')?.id).toBe('growth')
+    expect(lowestPlanWith('memberships')?.id).toBe('pro')
+    expect(lowestPlanWith('coalition')?.id).toBe('pro')
+    expect(lowestPlanWith('priority_support')?.id).toBe('pro')
   })
 
   it('resolves the cheapest plan that clears a required limit', () => {
     expect(lowestPlanWithLimit('customers', 100)?.id).toBe('starter')
     expect(lowestPlanWithLimit('customers', 900)?.id).toBe('growth')
     expect(lowestPlanWithLimit('customers', 10_000)?.id).toBe('pro')
-    // Beyond every numeric cap, only the unlimited tier qualifies.
-    expect(lowestPlanWithLimit('customers', 10_000_000)?.id).toBe('business')
+    expect(lowestPlanWithLimit('locations', 1)?.id).toBe('starter')
+    expect(lowestPlanWithLimit('locations', 2)?.id).toBe('growth')
+    expect(lowestPlanWithLimit('locations', 4)?.id).toBe('pro')
+  })
+
+  it('returns null rather than a plan when nothing can clear the amount', () => {
+    /*
+     * No tier is unlimited on customers any more, so a request beyond Pro's cap
+     * has no remedy to offer. Null is the honest answer, and the one the paywall
+     * renders as "get in touch" instead of pointing at a plan that would refuse
+     * the same call.
+     */
+    expect(lowestPlanWithLimit('customers', 10_000_000)).toBeNull()
+    expect(lowestPlanWithLimit('locations', 500)).toBeNull()
+  })
+
+  it('walks up the ladder and stops at the top', () => {
+    expect(nextPlanAfter('lapsed')?.id).toBe('starter')
+    expect(nextPlanAfter('starter')?.id).toBe('growth')
+    expect(nextPlanAfter('growth')?.id).toBe('pro')
+    expect(nextPlanAfter('pro')).toBeNull()
   })
 
   it('never suggests the inactive tier as a remedy', () => {
@@ -137,31 +176,184 @@ describe('plan catalogue', () => {
   })
 
   it('maps legacy plan identifiers so a deploy cannot gate a paying customer', () => {
-    // Rows written before the paid-only catalogue still say `free`/`enterprise`.
-    // Migration 15 rewrites them, but the resolver has to read the old values
-    // correctly during the deploy window.
+    /*
+     * Three generations of catalogue. `free` predates the paid-only ladder;
+     * `enterprise` was renamed to `business`; `business` was the fourth tier at
+     * $99 before the three-plan catalogue put Pro at that price. Migration
+     * 000024 rewrites the rows, but the resolver has to read every old value
+     * correctly during the window before it runs.
+     */
     expect(normalizePlanId('free')).toBe('lapsed')
-    expect(normalizePlanId('enterprise')).toBe('business')
+    expect(normalizePlanId('enterprise')).toBe('pro')
+    expect(normalizePlanId('business')).toBe('pro')
     expect(normalizePlanId('pro')).toBe('pro')
     expect(normalizePlanId('platinum')).toBeNull()
   })
 
+  it('never remaps a legacy tier onto a cheaper price than it was paying', () => {
+    // `business` was $99. Landing it anywhere below $99 would silently hand a
+    // paying merchant a discount, or worse, take features away at the same price.
+    expect(PLANS[normalizePlanId('business')!].monthlyPrice).toBe(99)
+    expect(PLANS[normalizePlanId('enterprise')!].monthlyPrice).toBe(99)
+  })
+
   it('reads the price for an interval', () => {
-    expect(priceFor(PLANS.growth, 'month')).toBe(19)
-    expect(priceFor(PLANS.growth, 'year')).toBe(190)
+    expect(priceFor(PLANS.growth, 'month')).toBe(59)
+    expect(priceFor(PLANS.growth, 'year')).toBe(590)
     expect(priceFor(PLANS.lapsed, 'month')).toBeNull()
   })
 
-  it('sells no free tier, and starts at $5', () => {
+  it('sells exactly three tiers at $29, $59 and $99', () => {
+    // The published prices, asserted rather than assumed. Every user-facing
+    // surface — pricing page, billing screen, onboarding, structured data,
+    // paywalls — renders these numbers from this catalogue, so this one test is
+    // what stops any of them drifting.
+    expect(PUBLIC_PLANS.map((plan) => plan.id)).toEqual(['starter', 'growth', 'pro'])
+    expect(PUBLIC_PLANS.map((plan) => plan.monthlyPrice)).toEqual([29, 59, 99])
+  })
+
+  it('sells no free tier and no permanent zero-price plan', () => {
     // A loyalty program that costs nothing never gets set up. Every purchasable
     // tier must cost real money, and the entry point is the price quoted on the
     // marketing page.
     for (const plan of PUBLIC_PLANS) {
       expect(plan.monthlyPrice, `${plan.name} must have a price`).not.toBeNull()
       expect(plan.monthlyPrice!, `${plan.name} must not be free`).toBeGreaterThan(0)
+      expect(plan.annualPrice!, `${plan.name} must not be free yearly`).toBeGreaterThan(0)
     }
+    // `free` is not a plan id, and nothing in the catalogue is named for one.
+    expect(isPlanId('free')).toBe(false)
+    expect(PLAN_IDS).not.toContain('free')
     expect(ENTRY_PLAN.id).toBe('starter')
-    expect(ENTRY_PLAN.monthlyPrice).toBe(5)
+    expect(ENTRY_PLAN.monthlyPrice).toBe(29)
+  })
+
+  it('discounts the year by two months on every tier', () => {
+    for (const plan of PUBLIC_PLANS) {
+      expect(plan.annualPrice, `${plan.name} annual is not ten months`).toBe(
+        plan.monthlyPrice! * 10
+      )
+      // The badge on the pricing page renders this number, so it has to be the
+      // same on every card or the copy reads as a per-plan promotion.
+      expect(annualSavingPercent(plan)).toBe(17)
+    }
+  })
+
+  it('recommends Growth, and recommends a plan somebody can buy', () => {
+    expect(RECOMMENDED_PLAN.id).toBe('growth')
+    expect(RECOMMENDED_PLAN.purchasable).toBe(true)
+    // Exactly one "most popular" badge, or the pricing page grows two.
+    expect(PUBLIC_PLANS.filter((plan) => plan.popular)).toHaveLength(1)
+  })
+
+  it('trials a real paid tier rather than an imaginary free one', () => {
+    // A trial is temporary access to a plan we sell, not a fourth product.
+    expect(isPurchasablePlan(TRIAL_PLAN)).toBe(true)
+    expect(PLANS[TRIAL_PLAN].monthlyPrice).toBeGreaterThan(0)
+    // And it lands somewhere with nothing switched on, never on a working tier.
+    expect(PLANS[TRIAL_EXPIRED_PLAN].purchasable).toBe(false)
+    expect(PLANS[TRIAL_EXPIRED_PLAN].features).toHaveLength(0)
+  })
+
+  it('caps every resource that costs us money to serve', () => {
+    /*
+     * Unit economics as an invariant. `null` on a metered resource is a promise
+     * of unlimited inference or unlimited SMS against a $99 subscription, which
+     * is how a SaaS acquires a customer it loses money on every month. Countable
+     * resources (customers, locations, seats) are nearly free to serve and are
+     * deliberately not in this list.
+     */
+    const METERED: LimitKey[] = [
+      'messages_per_month',
+      'ai_actions_per_month',
+      'proximity_campaigns',
+    ]
+    for (const plan of PUBLIC_PLANS) {
+      for (const key of METERED) {
+        expect(plan.limits[key], `${plan.name}.${key} must be capped`).not.toBeNull()
+      }
+    }
+  })
+
+  it('never sets a cap a feature gate makes unreachable, or vice versa', () => {
+    /*
+     * The subtle failure this exists to prevent, in both directions.
+     *
+     * A plan that grants a feature but caps it at zero shows the merchant a
+     * working screen and then refuses the click with a quota error. A plan that
+     * caps a feature it does not grant is the mirror image, and it actually
+     * shipped: Starter once had `proximity_campaigns: 2` without the feature, so
+     * the billing meter read "Proximity campaigns 0 / 2" beside a screen
+     * answering "available from Growth" — two surfaces, two answers, and the
+     * encouraging one was the wrong one.
+     *
+     * It also fixes what `lowestPlanWithLimit` reports. Asked for a plan allowing
+     * one proximity campaign it must return the cheapest plan that can actually
+     * run one, and a phantom cap of 2 on Starter made it answer Starter.
+     */
+    const GATED: Array<{ limit: LimitKey; feature: Feature }> = [
+      { limit: 'campaigns_per_month', feature: 'campaigns' },
+      { limit: 'ai_actions_per_month', feature: 'ai' },
+      { limit: 'proximity_campaigns', feature: 'proximity_campaigns' },
+      { limit: 'automation_rules', feature: 'automation_rules' },
+    ]
+
+    for (const plan of PUBLIC_PLANS) {
+      for (const { limit, feature } of GATED) {
+        const allowance = plan.limits[limit]
+        const granted = plan.features.includes(feature)
+        if (granted) {
+          expect(
+            allowance === null || allowance > 0,
+            `${plan.name} grants "${feature}" but caps ${limit} at ${allowance}`
+          ).toBe(true)
+        } else {
+          expect(
+            allowance,
+            `${plan.name} caps ${limit} at ${allowance} without granting "${feature}"`
+          ).toBe(0)
+        }
+      }
+    }
+  })
+
+  it('gives the entry tier a usable allowance of everything it includes', () => {
+    /*
+     * Starter's commercial promise, as numbers rather than as copy. A café must be
+     * able to brand a card, campaign to its list, keep automations running,
+     * segment, and use the AI — with an allowance large enough that none of it is
+     * a teaser.
+     */
+    const starter = PLANS.starter
+    expect(starter.features).toContain('campaigns')
+    expect(starter.limits.campaigns_per_month).toBeGreaterThanOrEqual(10)
+    expect(starter.features).toContain('ai')
+    expect(starter.limits.ai_actions_per_month).toBeGreaterThanOrEqual(25)
+    expect(starter.features).toContain('automations')
+    expect(starter.features).toContain('segments')
+    // Enough to email a full 500-customer list several times a month.
+    expect(starter.limits.messages_per_month).toBeGreaterThanOrEqual(
+      starter.limits.customers! * 2
+    )
+    // One location and more than one person behind the counter.
+    expect(starter.limits.locations).toBe(1)
+    expect(starter.limits.team_members).toBeGreaterThan(1)
+  })
+
+  it('keeps the whole wallet experience on the entry tier', () => {
+    /*
+     * The wallet card *is* the product, so gating it would make Starter a demo
+     * rather than a plan. `custom_branding` covers the brand kit and the card
+     * designer — logo, colours, templates, what the card shows — and
+     * `wallet_proximity` is the pass surfacing on the lock screen near the shop.
+     *
+     * What Growth adds is control rather than access: geofences the merchant
+     * defines and pushes they schedule.
+     */
+    expect(PLANS.starter.features).toContain('custom_branding')
+    expect(PLANS.starter.features).toContain('wallet_proximity')
+    expect(PLANS.starter.features).not.toContain('geofencing')
+    expect(PLANS.growth.features).toContain('geofencing')
   })
 
   it('hides the inactive tier from the pricing page', () => {
@@ -201,9 +393,29 @@ describe('resolveEntitlements', () => {
     const result = resolveEntitlements('biz-1', row(), now)
     expect(result.trial.active).toBe(true)
     expect(result.effectivePlan).toBe(TRIAL_PLAN)
-    expect(result.features.has('ai')).toBe(true)
+    // The trial runs on Growth, so a trialling merchant has geofencing but not
+    // memberships. Asserted because the copy on three screens says exactly this.
+    expect(result.features.has('geofencing')).toBe(true)
+    expect(result.features.has('memberships')).toBe(false)
     expect(result.lapsed).toBe(false)
     expect(result.trial.daysRemaining).toBe(10)
+  })
+
+  it('leaves an expired trial holding a paid tier alone', () => {
+    /*
+     * `trial_ends_at` in the past on a `growth` row is the normal state of every
+     * merchant who converted: Stripe clears the trial date on activation, but a
+     * webhook can arrive out of order. The stored tier has to win, or a paying
+     * customer is lapsed by a stale timestamp.
+     */
+    const result = resolveEntitlements(
+      'biz-1',
+      row({ plan: 'growth', subscription_status: 'active', trial_ends_at: past }),
+      now
+    )
+    expect(result.effectivePlan).toBe('growth')
+    expect(result.lapsed).toBe(false)
+    expect(result.trial.active).toBe(false)
   })
 
   it('drops an expired trial to the inactive state without deleting anything', () => {
@@ -212,6 +424,11 @@ describe('resolveEntitlements', () => {
     expect(result.effectivePlan).toBe(TRIAL_EXPIRED_PLAN)
     expect(result.lapsed).toBe(true)
     expect(result.features.has('ai')).toBe(false)
+    // An expired trial is not a free plan. Nothing is granted, and every
+    // countable allowance is zero, so every write is refused with one remedy.
+    expect(result.features.size).toBe(0)
+    expect(result.limits.customers).toBe(0)
+    expect(result.limits.campaigns_per_month).toBe(0)
   })
 
   it('reads a legacy `free` row as inactive rather than as an unknown plan', () => {
@@ -220,15 +437,19 @@ describe('resolveEntitlements', () => {
     expect(result.lapsed).toBe(true)
   })
 
-  it('reads a legacy `enterprise` row as the top paid tier', () => {
-    const result = resolveEntitlements(
-      'biz-1',
-      row({ plan: 'enterprise', subscription_status: 'active', trial_ends_at: past }),
-      now
-    )
-    expect(result.effectivePlan).toBe('business')
-    expect(result.lapsed).toBe(false)
-    expect(result.features.has('sso')).toBe(true)
+  it('reads legacy `enterprise` and `business` rows as the top paid tier', () => {
+    for (const stored of ['enterprise', 'business']) {
+      const result = resolveEntitlements(
+        'biz-1',
+        row({ plan: stored, subscription_status: 'active', trial_ends_at: past }),
+        now
+      )
+      expect(result.effectivePlan, `${stored} should resolve to pro`).toBe('pro')
+      expect(result.lapsed).toBe(false)
+      // Still paying $99, still has everything the old top tier could do.
+      expect(result.features.has('coalition')).toBe(true)
+      expect(result.features.has('memberships')).toBe(true)
+    }
   })
 
   it('honours a paid plan and ignores any leftover trial date', () => {
@@ -317,9 +538,28 @@ describe('presentation metadata', () => {
     }
   })
 
-  it('gives Business every feature, so the top tier is never a downgrade', () => {
+  it('gives Pro every feature, so the top tier is never a downgrade', () => {
     for (const feature of FEATURES as readonly Feature[]) {
-      expect(PLANS.business.features.includes(feature)).toBe(true)
+      expect(PLANS.pro.features.includes(feature), `Pro is missing "${feature}"`).toBe(true)
+    }
+  })
+
+  it('sells nothing it has not built', () => {
+    /*
+     * The catalogue used to advertise `sso`, `api_access`, `webhooks` and
+     * `team_management` on the top tier. None of the four existed anywhere in the
+     * codebase — no route checked them, no screen unlocked behind them — so a
+     * merchant could pay $99 for four things that were never going to arrive.
+     *
+     * This guards the general case rather than those four names: a feature that
+     * no purchasable plan sells is dead config, and a feature nobody enforces is
+     * worse, so the audit in PRICING_AUDIT.md records the call site for each.
+     */
+    for (const feature of FEATURES as readonly Feature[]) {
+      expect(lowestPlanWith(feature), `"${feature}" is sold by no plan`).not.toBeNull()
+    }
+    for (const removed of ['sso', 'api_access', 'webhooks', 'team_management']) {
+      expect(FEATURES as readonly string[]).not.toContain(removed)
     }
   })
 

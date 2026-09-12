@@ -2,7 +2,7 @@ import 'server-only'
 import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { num } from '@/lib/domain/types'
-import { PLANS, TRIAL_EXPIRED_PLAN, type PlanId } from '@/lib/billing/plans'
+import { PLANS, PLAN_IDS, TRIAL_EXPIRED_PLAN, type PlanId } from '@/lib/billing/plans'
 import { describeStoredPlan } from '@/lib/billing/entitlements'
 import { capabilityReport } from '@/lib/env'
 import { walletService } from '@/lib/wallet/service'
@@ -36,13 +36,22 @@ export type PlatformOverview = {
   walletProviders: ReturnType<ReturnType<typeof walletService>['status']>
 }
 
-const MONTHLY_CENTS: Record<PlanId, number> = {
-  lapsed: 0,
-  starter: 500,
-  growth: 1_900,
-  pro: 4_900,
-  business: 9_900,
-}
+/**
+ * Monthly price in minor units, per tier.
+ *
+ * Derived from the catalogue rather than written out, because this table used to
+ * be a hand-maintained copy of the prices — which is exactly the kind of
+ * duplication that survives a pricing change and quietly reports last quarter's
+ * MRR. `PLANS` is the only place a price is decided.
+ */
+const MONTHLY_CENTS: Record<PlanId, number> = Object.fromEntries(
+  PLAN_IDS.map((id) => [id, Math.round((PLANS[id].monthlyPrice ?? 0) * 100)])
+) as Record<PlanId, number>
+
+/** What a yearly subscriber contributes each month: the annual price over twelve. */
+const ANNUAL_MONTHLY_CENTS: Record<PlanId, number> = Object.fromEntries(
+  PLAN_IDS.map((id) => [id, ((PLANS[id].annualPrice ?? 0) * 100) / 12])
+) as Record<PlanId, number>
 
 export async function getPlatformOverview(): Promise<PlatformOverview> {
   const admin = getDb()
@@ -91,11 +100,17 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
        * so it is excluded here even though it now counts towards its tier.
        */
       if (!described.onTrial && business.subscription_status === 'active') {
-        // A yearly plan is ten months' price, so its monthly contribution is
-        // 10/12 of the list rate — reporting the list rate would overstate MRR.
+        /*
+         * A yearly subscriber's monthly contribution is their annual price over
+         * twelve, taken from the catalogue rather than from the 10/12 ratio this
+         * used to assume. The ratio happens to be right today — every tier is
+         * priced at ten months — but a discount change would have made this
+         * overstate MRR silently, which is the worst way for a revenue number to
+         * be wrong.
+         */
         entry.mrrCents +=
           business.plan_interval === 'year'
-            ? Math.round((MONTHLY_CENTS[plan] * 10) / 12)
+            ? Math.round(ANNUAL_MONTHLY_CENTS[plan])
             : MONTHLY_CENTS[plan]
       }
       planBreakdown.set(plan, entry)

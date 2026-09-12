@@ -42,8 +42,7 @@ const ONLY = process.env.VERIFY_ONLY ?? ''
 const ACCOUNTS = [
   { plan: 'starter', email: 'starter@demo.com', business: 'Madrid Coffee' },
   { plan: 'growth', email: 'growth@demo.com', business: 'Barcelona Barber' },
-  { plan: 'pro', email: 'pro@demo.com', business: 'Valencia Fitness' },
-  { plan: 'business', email: 'business@demo.com', business: 'Sevilla Bakery' },
+  { plan: 'pro', email: 'pro@demo.com', business: 'Sevilla Bakery' },
   { plan: 'trial', email: 'trial@demo.com', business: 'Bilbao Pizzeria' },
   { plan: 'lapsed', email: 'lapsed@demo.com', business: 'Zaragoza Florist' },
 ]
@@ -189,68 +188,82 @@ class Client {
 
 const EXPECTED_PLANS = {
   starter: {
-    monthlyPrice: 5,
-    has: ['custom_branding', 'wallet_proximity'],
-    lacks: [
-      'campaigns', 'automations', 'segments', 'ai', 'gift_cards', 'memberships',
-      'automation_rules', 'multi_location', 'proximity_campaigns', 'geofencing',
-      'advanced_analytics', 'api_access', 'webhooks', 'coalition', 'sso',
-      'team_management', 'priority_support',
+    monthlyPrice: 29,
+    /*
+     * The commercial claim of the $29 tier, written out as an independent
+     * expectation. Campaigns, automations, segments and AI moved *into* this list
+     * in pricing v2: a café that cannot campaign to its own list is collecting
+     * customers, not retaining them, and Starter has to be a product rather than
+     * a demonstration of one.
+     */
+    has: [
+      'custom_branding', 'wallet_proximity', 'campaigns', 'automations',
+      'segments', 'ai',
     ],
-    limits: { customers: 500, locations: 1, team_members: 2, campaigns_per_month: 0 },
+    lacks: [
+      'gift_cards', 'memberships', 'automation_rules', 'multi_location',
+      'proximity_campaigns', 'geofencing', 'advanced_analytics', 'coalition',
+      'priority_support',
+    ],
+    limits: {
+      customers: 500, locations: 1, team_members: 3,
+      campaigns_per_month: 10, ai_actions_per_month: 25,
+      proximity_campaigns: 0, automation_rules: 0,
+    },
   },
   growth: {
-    monthlyPrice: 19,
+    monthlyPrice: 59,
     has: [
-      'campaigns', 'automations', 'gift_cards', 'segments', 'custom_branding',
-      'multi_location', 'wallet_proximity', 'geofencing', 'proximity_campaigns',
-      'automation_rules',
+      'campaigns', 'automations', 'segments', 'custom_branding',
+      'wallet_proximity', 'ai', 'multi_location', 'geofencing',
+      'proximity_campaigns', 'automation_rules', 'gift_cards',
+      'advanced_analytics',
     ],
-    lacks: [
-      'ai', 'memberships', 'api_access', 'webhooks', 'advanced_analytics',
-      'coalition', 'sso', 'team_management', 'priority_support',
-    ],
-    limits: { customers: 5000, locations: 5, team_members: 10 },
+    lacks: ['memberships', 'coalition', 'priority_support'],
+    limits: {
+      customers: 5000, locations: 3, team_members: 10,
+      campaigns_per_month: 50, ai_actions_per_month: 300,
+      proximity_campaigns: 15, automation_rules: 20,
+    },
   },
   pro: {
-    monthlyPrice: 49,
-    has: [
-      'campaigns', 'automations', 'gift_cards', 'memberships', 'ai',
-      'advanced_analytics', 'segments', 'api_access', 'webhooks', 'multi_location',
-      'custom_branding', 'wallet_proximity', 'geofencing', 'proximity_campaigns',
-      'automation_rules',
-    ],
-    lacks: ['coalition', 'sso', 'priority_support', 'team_management'],
-    limits: { customers: 25000, locations: 15, team_members: 25 },
-  },
-  business: {
     monthlyPrice: 99,
     has: [
-      'campaigns', 'automations', 'gift_cards', 'memberships', 'ai',
-      'advanced_analytics', 'segments', 'api_access', 'webhooks', 'coalition',
-      'multi_location', 'custom_branding', 'priority_support', 'sso',
-      'team_management', 'wallet_proximity', 'geofencing', 'proximity_campaigns',
-      'automation_rules',
+      'campaigns', 'automations', 'segments', 'custom_branding',
+      'wallet_proximity', 'ai', 'multi_location', 'geofencing',
+      'proximity_campaigns', 'automation_rules', 'gift_cards',
+      'advanced_analytics', 'memberships', 'coalition', 'priority_support',
     ],
     lacks: [],
-    limits: { customers: null, locations: null, team_members: null },
+    /*
+     * Deliberately not unlimited. The tier this replaced advertised `null` on
+     * every cap; unlimited inference and unlimited SMS on a $99 subscription is
+     * how a SaaS acquires a customer it loses money on every month.
+     */
+    limits: {
+      customers: 20000, locations: 10, team_members: 25,
+      campaigns_per_month: null, ai_actions_per_month: 1500,
+      proximity_campaigns: 50, automation_rules: 100,
+    },
   },
   /*
-   * A live trial is entitled to Pro. That is deliberate: the features a merchant
-   * falls in love with should be the ones we most want them to pay for, so the
-   * drop at day 14 is a felt loss. The stored plan is `trial`; the *effective*
-   * plan is what gates, and that is what these expectations describe.
+   * A live trial is entitled to **Growth**, not Pro. Growth is the plan we most
+   * want merchants to buy, so the fourteen days are spent inside the product
+   * actually being sold and the day-15 question is "keep this?" rather than
+   * "which of three things was I using?". The stored plan is `trial`; the
+   * *effective* plan is what gates, and that is what these expectations describe.
    */
   trial: {
-    monthlyPrice: 49,
-    effectiveOf: 'pro',
+    monthlyPrice: 59,
+    effectiveOf: 'growth',
     has: [
-      'campaigns', 'automations', 'gift_cards', 'memberships', 'ai',
-      'advanced_analytics', 'segments', 'api_access', 'webhooks',
-      'automation_rules', 'proximity_campaigns',
+      'campaigns', 'automations', 'segments', 'custom_branding',
+      'wallet_proximity', 'ai', 'multi_location', 'geofencing',
+      'proximity_campaigns', 'automation_rules', 'gift_cards',
+      'advanced_analytics',
     ],
-    lacks: ['coalition', 'sso', 'team_management'],
-    limits: { customers: 25000, locations: 15, team_members: 25 },
+    lacks: ['memberships', 'coalition', 'priority_support'],
+    limits: { customers: 5000, locations: 3, team_members: 10 },
   },
   /*
    * No features at all, every countable limit at zero. Reads still work — a
@@ -265,7 +278,8 @@ const EXPECTED_PLANS = {
     lacks: [
       'campaigns', 'automations', 'segments', 'gift_cards', 'memberships', 'ai',
       'automation_rules', 'proximity_campaigns', 'custom_branding',
-      'wallet_proximity', 'geofencing',
+      'wallet_proximity', 'geofencing', 'advanced_analytics', 'coalition',
+      'multi_location', 'priority_support',
     ],
     limits: { customers: 0, locations: 1, team_members: 1 },
   },
@@ -527,19 +541,34 @@ async function verifyPlan(session, account) {
 
   const catalogue = payload?.catalogue ?? []
   check(
-    'the catalogue is the four purchasable tiers',
-    catalogue.length === 4,
+    'the catalogue is the three purchasable tiers',
+    catalogue.length === 3,
+    catalogue.map((plan) => `${plan.id}:$${plan.monthly_price}`).join(' ')
+  )
+  check(
+    'the catalogue is exactly $29 / $59 / $99',
+    catalogue.map((plan) => Number(plan.monthly_price)).join(',') === '29,59,99',
     catalogue.map((plan) => `${plan.id}:$${plan.monthly_price}`).join(' ')
   )
   check(
     'no free plan is offered anywhere in the catalogue',
-    catalogue.length > 0 && catalogue.every((plan) => Number(plan.monthly_price) >= 5),
+    catalogue.length > 0 && catalogue.every((plan) => Number(plan.monthly_price) >= 29),
     `cheapest $${Math.min(...catalogue.map((plan) => Number(plan.monthly_price)))}`
   )
   check(
-    'the entry tier is $5/month',
-    Math.min(...catalogue.map((plan) => Number(plan.monthly_price))) === 5,
+    'the entry tier is $29/month',
+    Math.min(...catalogue.map((plan) => Number(plan.monthly_price))) === 29,
     catalogue.map((plan) => `${plan.id}:$${plan.monthly_price}`).join(' ')
+  )
+  check(
+    'yearly is ten months on every tier — a flat 17% discount',
+    catalogue.every((plan) => Number(plan.annual_price) === Number(plan.monthly_price) * 10),
+    catalogue.map((plan) => `${plan.id}:$${plan.monthly_price}/$${plan.annual_price}`).join(' ')
+  )
+  check(
+    'the retired fourth tier is gone from the catalogue',
+    !catalogue.some((plan) => plan.id === 'business'),
+    catalogue.map((plan) => plan.id).join(', ')
   )
   check(
     'the catalogue never lists an internal state as purchasable',
@@ -2112,7 +2141,7 @@ async function verifyAdmin() {
     const trialRow = rows.find((row) => row.name === 'Bilbao Pizzeria')
     check(
       'a live trial is shown on the tier it is evaluating, not as Inactive',
-      trialRow ? trialRow.plan === 'pro' && trialRow.onTrial === true : false,
+      trialRow ? trialRow.plan === 'growth' && trialRow.onTrial === true : false,
       trialRow ? `plan=${trialRow.plan} label=${trialRow.planLabel} onTrial=${trialRow.onTrial}` : 'workspace not listed'
     )
     const lapsedRow = rows.find((row) => row.name === 'Zaragoza Florist')
@@ -2142,7 +2171,7 @@ async function verifyAdmin() {
 
   // A merchant must not reach the admin surface.
   const merchant = new Client('merchant')
-  await merchant.post('/api/v1/auth/login', { email: 'business@demo.com', password: DEMO_PASSWORD })
+  await merchant.post('/api/v1/auth/login', { email: 'pro@demo.com', password: DEMO_PASSWORD })
   const denied = await merchant.get('/api/v1/admin/overview')
   checkStatus('a merchant cannot read the admin overview', denied, [401, 403, 404])
   const deniedBusinesses = await merchant.get('/api/v1/admin/businesses')
@@ -2155,11 +2184,25 @@ async function verifySignupJourney() {
   const stamp = Date.now()
   const email = `zz-verify-new-${stamp}@demo.invalid`
 
+  /*
+   * Acceptance is required by the endpoint, not by the form. The checkbox on
+   * /signup can be satisfied by anyone posting JSON, so the only enforcement
+   * that means anything is this rejection — and the only way to know it holds
+   * is to attempt the signup the checkbox was meant to prevent.
+   */
+  const withoutConsent = await client.post('/api/v1/auth/signup', {
+    email: `zz-verify-noconsent-${stamp}@demo.invalid`,
+    password: 'ZzVerify-New-2026!',
+    businessName: `ZZ Verify No Consent ${stamp}`,
+  })
+  checkStatus('signup is refused without accepting the terms', withoutConsent, [400, 422])
+
   const signup = await client.post('/api/v1/auth/signup', {
     email,
     password: 'ZzVerify-New-2026!',
     fullName: 'ZZ Verify Founder',
     businessName: `ZZ Verify Cafe ${stamp}`,
+    acceptedTerms: true,
   })
   if (!checkStatus('a brand-new merchant can sign up', signup, [200, 201])) {
     warn('new-merchant journey', 'aborted: signup failed')
@@ -2214,13 +2257,31 @@ async function verifySignupJourney() {
     const b = billing.json ?? {}
     check(
       'a new workspace starts on a live trial, never on a free plan',
-      b.stored_plan === 'trial' && b.effective_plan === 'pro' && b.trial?.active === true,
+      b.stored_plan === 'trial' && b.effective_plan === 'growth' && b.trial?.active === true,
       `stored="${b.stored_plan}" resolved="${b.plan}" effective="${b.effective_plan}" trialActive=${b.trial?.active} daysLeft=${b.trial?.daysRemaining}`
     )
     check(
-      'the trial grants the tier the merchant is being sold, not the cheapest one',
-      b.effective_plan === 'pro' && (b.features ?? []).includes('ai'),
-      `${(b.features ?? []).length} features`
+      /*
+       * The trial runs on Growth — the plan we most want merchants to buy — not
+       * on the entry tier and not on the top one. Both halves are asserted: it
+       * must include what Growth includes (geofencing, gift cards, the AI), and
+       * it must *not* include what only Pro does. A trial that quietly granted
+       * memberships would teach a café to depend on a $99 feature before showing
+       * it a $29 invoice.
+       */
+      'the trial grants Growth — not the cheapest tier, and not the top one',
+      b.effective_plan === 'growth' &&
+        ['ai', 'geofencing', 'gift_cards', 'advanced_analytics'].every((f) =>
+          (b.features ?? []).includes(f)
+        ) &&
+        !['memberships', 'coalition'].some((f) => (b.features ?? []).includes(f)),
+      `${(b.features ?? []).length} features: ${(b.features ?? []).join(', ')}`
+    )
+    check(
+      'a trial is not a free plan — it is a paid tier with the card deferred',
+      b.catalogue?.some((plan) => plan.id === b.effective_plan && Number(plan.monthly_price) > 0) ===
+        true,
+      `effective="${b.effective_plan}" is a purchasable tier priced above zero`
     )
   }
 
@@ -2353,9 +2414,162 @@ async function verifySignupJourney() {
   return { email, businessId }
 }
 
+/**
+ * Staff invitations.
+ *
+ * Runs on a fresh workspace so the seat arithmetic starts from a known place:
+ * one owner, and a plan whose cap is small enough that filling it is cheap.
+ * What is actually being checked is that the cap counts *pending* invitations —
+ * a cap that only counted accepted members would let a three-seat tenant issue
+ * fifty invitations and then acquire fifty colleagues.
+ */
+async function verifyTeamInvitations() {
+  heading('Staff invitations')
+  const owner = new Client('team-owner')
+  const stamp = Date.now()
+
+  const signup = await owner.post('/api/v1/auth/signup', {
+    email: `zz-verify-team-${stamp}@demo.invalid`,
+    password: 'ZzVerify-Team-2026!',
+    businessName: `ZZ Verify Team ${stamp}`,
+    acceptedTerms: true,
+  })
+  if (!checkStatus('a workspace can be created to invite into', signup, [200, 201])) {
+    warn('staff invitations', 'aborted: signup failed')
+    return
+  }
+
+  const businessId = signup.json?.business?.id
+  if (!businessId) {
+    warn('staff invitations', 'aborted: no business id in the signup response')
+    return
+  }
+
+  const roster = await owner.get(`/api/v1/team?businessId=${businessId}`)
+  if (!checkStatus('the roster is readable', roster, 200)) return
+  check(
+    'the roster reports the plan seat allowance',
+    typeof roster.json?.seats?.allowed === 'number' && roster.json?.seats?.used === 1,
+    `seats ${JSON.stringify(roster.json?.seats)}`
+  )
+  check(
+    'the owner role is not offered as an invitable role',
+    Array.isArray(roster.json?.assignableRoles) &&
+      !roster.json.assignableRoles.includes('owner'),
+    JSON.stringify(roster.json?.assignableRoles)
+  )
+
+  const invitee = `zz-verify-invitee-${stamp}@demo.invalid`
+  const invite = await owner.post('/api/v1/team', {
+    businessId,
+    email: invitee,
+    role: 'staff',
+  })
+  if (!checkStatus('an invitation can be sent', invite, 200)) return
+  check('the invitation starts as pending', invite.json?.member?.status === 'invited')
+  check(
+    'a deployment with no email provider returns the link instead of losing the invite',
+    invite.json?.email_sent === false
+      ? typeof invite.json?.invite_url === 'string'
+      : invite.json?.invite_url === null,
+    JSON.stringify({ sent: invite.json?.email_sent, hasUrl: Boolean(invite.json?.invite_url) })
+  )
+
+  const held = await owner.get(`/api/v1/team?businessId=${businessId}`)
+  check(
+    'a pending invitation consumes a seat',
+    held.json?.seats?.used === 2,
+    `seats ${JSON.stringify(held.json?.seats)}`
+  )
+
+  // Fill the plan, then ask for one more. The cap has to answer 402 with a
+  // suggested plan rather than accepting an invitation it cannot honour.
+  const allowed = roster.json?.seats?.allowed ?? 3
+  let capStatus = 0
+  for (let index = 0; index < allowed + 2; index += 1) {
+    const extra = await owner.post('/api/v1/team', {
+      businessId,
+      email: `zz-verify-seat-${index}-${stamp}@demo.invalid`,
+      role: 'viewer',
+    })
+    if (extra.status !== 200) {
+      capStatus = extra.status
+      break
+    }
+  }
+  check('the seat cap refuses an over-limit invitation', capStatus === 402, `HTTP ${capStatus}`)
+
+  const token = invite.json?.invite_url
+    ? new URL(invite.json.invite_url).searchParams.get('token')
+    : null
+
+  if (token) {
+    const anon = new Client('anon')
+    const anonAccept = await anon.post('/api/v1/team/accept', { token })
+    checkStatus('an anonymous caller cannot accept an invitation', anonAccept, 401)
+
+    // The invited address is the only one that may accept, and someone else
+    // holding a forwarded email must not be able to walk in.
+    const stranger = new Client('team-stranger')
+    const strangerSignup = await stranger.post('/api/v1/auth/signup', {
+      email: `zz-verify-stranger-${stamp}@demo.invalid`,
+      password: 'ZzVerify-Stranger-2026!',
+      businessName: `ZZ Verify Stranger ${stamp}`,
+      acceptedTerms: true,
+    })
+    if (strangerSignup.status === 200) {
+      const wrong = await stranger.post('/api/v1/team/accept', { token })
+      checkStatus('a different account cannot accept the invitation', wrong, 403)
+      const crossRead = await stranger.get(`/api/v1/team?businessId=${businessId}`)
+      checkStatus('another tenant cannot read the roster', crossRead, [401, 403, 404])
+    }
+
+    const accepter = new Client('team-invitee')
+    const accepterSignup = await accepter.post('/api/v1/auth/signup', {
+      email: invitee,
+      password: 'ZzVerify-Invitee-2026!',
+      businessName: `ZZ Verify Invitee ${stamp}`,
+      acceptedTerms: true,
+    })
+    if (accepterSignup.status === 200) {
+      const accepted = await accepter.post('/api/v1/team/accept', { token })
+      checkStatus('the invited person can accept', accepted, 200)
+      const replay = await accepter.post('/api/v1/team/accept', { token })
+      checkStatus('the invitation token is single use', replay, 403)
+    }
+  } else {
+    warn('staff invitations', 'no invite link returned; acceptance was not exercised')
+  }
+
+  const ownerRow = (held.json?.members ?? []).find((member) => member.role === 'owner')
+  if (ownerRow) {
+    const demote = await owner.patch('/api/v1/team', {
+      businessId,
+      memberId: ownerRow.id,
+      role: 'staff',
+    })
+    checkStatus('the owner role cannot be reassigned', demote, 403)
+    const removeOwner = await owner.del('/api/v1/team', {
+      body: { businessId, memberId: ownerRow.id },
+    })
+    checkStatus('the owner cannot be removed from their workspace', removeOwner, 403)
+  }
+
+  // The checklist item that used to be impossible.
+  const checklist = await owner.get(`/api/v1/onboarding?businessId=${businessId}`)
+  check(
+    'the onboarding team step is now reachable',
+    (checklist.json?.facts?.teamMemberCount ?? 0) > 1,
+    JSON.stringify(checklist.json?.facts?.teamMemberCount)
+  )
+}
+
 async function verifyPublicSurfaces(slug) {
   heading('Public surfaces')
   const anon = new Client('anon')
+  // Same `capabilityReport()` the application reads, so the wallet-link
+  // assertions below hold on a deployment with either provider configured.
+  const capabilities = (await anon.get('/api/v1/health')).json?.capabilities ?? {}
 
   const pages = ['/', '/login', '/signup', '/reset-password', '/offline', '/legal/privacy', '/legal/terms', `/join/${slug}`]
   const broken = []
@@ -2373,34 +2587,59 @@ async function verifyPublicSurfaces(slug) {
   )
 
   /*
-   * Checked per locale. Spanish is the default and `Intl` renders USD as
-   * "5,00 US$" there, so grepping for "$5" against an uncookied request finds
-   * nothing and says nothing about the page — it says the checker did not set a
-   * language. Both renderings are asserted instead.
+   * Checked per locale, and per price.
+   *
+   * Spanish renders USD *after* the number — `29 $`, not `$29` — so grepping for
+   * "$29" against an uncookied request finds nothing and says nothing about the
+   * page; it says the checker did not set a language. Both renderings are
+   * asserted, and all three prices, because a surface that has stopped reading
+   * the catalogue typically keeps one of them accidentally correct.
    */
-  for (const [locale, pattern] of [
-    ['en', /\$5(\.00)?\b/],
-    ['es', /5,00\s*US\$|US\$\s*5|\$5/],
+  for (const [locale, priceFor, perMonth] of [
+    ['en', (n) => new RegExp(`\\$${n}\\b`), /\/month/],
+    ['es', (n) => new RegExp(`${n}(&nbsp;|\\s|\\u00a0)\\$`), /\/mes/],
   ]) {
     const localised = new Client('anon')
     localised.setCookie('passimo_locale', locale)
     const page = await localised.get('/', { raw: true })
+
+    for (const amount of [29, 59, 99]) {
+      const pattern = priceFor(amount)
+      check(
+        `the landing page quotes $${amount} in ${locale.toUpperCase()}`,
+        pattern.test(page.text),
+        pattern.test(page.text) ? 'present' : 'not found'
+      )
+    }
     check(
-      `the landing page quotes the $5 entry price in ${locale.toUpperCase()}`,
-      pattern.test(page.text),
-      pattern.test(page.text) ? 'present' : (page.text.match(/[0-9][.,]00[^<]{0,6}/) ?? ['not found'])[0]
+      `the landing page states the billing period in ${locale.toUpperCase()}`,
+      perMonth.test(page.text),
+      perMonth.test(page.text) ? 'present' : 'not found'
     )
   }
 
   check(
-    'the four prices are in the structured data crawlers read',
-    ['"price":5', '"price":19', '"price":49', '"price":99'].every((p) => landing.text.includes(p)),
+    'the three prices are in the structured data crawlers read',
+    ['"price":29', '"price":59', '"price":99'].every((p) => landing.text.includes(p)),
     'ld+json offers present'
   )
   check(
+    'no retired price survives in the structured data',
+    !['"price":5,', '"price":19', '"price":49'].some((p) => landing.text.includes(p)),
+    'no stale ld+json offer'
+  )
+  check(
     'the landing page does not advertise a free plan',
-    !/free plan|plan gratis|gratis para siempre|free forever|plan gratuito/i.test(landing.text),
-    'no free-tier claim'
+    /*
+     * Structural, not lexical. The pricing FAQ *asks* "Is there a free plan?" and
+     * answers "No" — copy that exists precisely to settle the question, and which
+     * a keyword sweep flags as the thing it was written to deny. What must not
+     * appear is a zero price or a card named Free.
+     */
+    !/\$0|0[.,]00\s*(US\$|\$)|>Free<|gratis para siempre|free forever|forever free/i.test(
+      landing.text
+    ),
+    'no zero-price tier on the page'
   )
   check(
     'the landing page makes no unverifiable social-proof claim',
@@ -2452,13 +2691,31 @@ async function verifyPublicSurfaces(slug) {
   })
   if (checkStatus('a customer can enrol from the public join page', publicJoin, [200, 201])) {
     check(
-      'enrolment returns a card and both wallet links',
-      Boolean(publicJoin.json?.card_url) &&
-        Boolean(publicJoin.json?.apple_wallet_url) &&
-        Boolean(publicJoin.json?.google_wallet_url) &&
-        Boolean(publicJoin.json?.referral_code),
+      'enrolment returns a card and a referral code',
+      Boolean(publicJoin.json?.card_url) && Boolean(publicJoin.json?.referral_code),
       `referral code ${publicJoin.json?.referral_code}`
     )
+    /*
+     * A wallet link is present exactly when that provider has credentials, and
+     * this used to require both unconditionally. Apple and Google are
+     * configured independently, so a URL for a provider with no certificate is
+     * a button that answers 503 — on the last screen of the enrolment funnel.
+     * Asserting the correspondence rather than the presence is what makes this
+     * check meaningful on a deployment that has configured neither, one, or
+     * both.
+     */
+    for (const [provider, key, capability] of [
+      ['Apple', 'apple_wallet_url', 'appleWallet'],
+      ['Google', 'google_wallet_url', 'googleWallet'],
+    ]) {
+      const configured = Boolean(capabilities?.[capability])
+      const url = publicJoin.json?.[key] ?? null
+      check(
+        `the ${provider} wallet link is offered only when ${provider} is configured`,
+        configured ? typeof url === 'string' : url === null,
+        `configured=${configured} url=${url === null ? 'null' : 'present'}`
+      )
+    }
     // The token is the last path segment of the card URL.
     const token = (publicJoin.json?.card_url ?? '').split('/card/')[1] ?? null
     if (token) {
@@ -2557,7 +2814,7 @@ async function main() {
      * that for every plan adds ninety HTTP round trips and no new information —
      * the dictionary is not per-tenant.
      */
-    if (account.plan === 'business') await verifyLocalization(session, account)
+    if (account.plan === 'pro') await verifyLocalization(session, account)
   }
 
   await verifyTenantIsolation(sessions)
@@ -2565,6 +2822,7 @@ async function main() {
   await verifyPublicSurfaces(Object.values(sessions)[0].slug)
   await verifyAdmin()
   await verifySignupJourney()
+  await verifyTeamInvitations()
 
   return report()
 }

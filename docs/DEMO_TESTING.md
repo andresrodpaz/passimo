@@ -128,10 +128,9 @@ Full credentials, per-plan test scripts and the verified feature matrix are in
 
 | | | |
 | --- | --- | --- |
-| `starter@demo.com` | $5 | Madrid Coffee — café, 1 site, stamp card |
-| `growth@demo.com` | $19 | Barcelona Barber — 3 sites, campaigns, geofencing |
-| `pro@demo.com` | $49 | Valencia Fitness — points, memberships, AI |
-| `business@demo.com` | $99 | Sevilla Bakery — 4 sites, everything |
+| `starter@demo.com` | $29 | Madrid Coffee — café, 1 site, stamp card, the complete core product |
+| `growth@demo.com` | $59 | Barcelona Barber — 3 sites, geofencing, gift cards, advanced analytics |
+| `pro@demo.com` | $99 | Sevilla Bakery — 4 sites, points, memberships, the largest dataset |
 | `trial@demo.com` | trial | Bilbao Pizzeria — 9 days of Pro left |
 | `lapsed@demo.com` | lapsed | Zaragoza Florist — the paywall |
 | `admin@passimo.demo` | — | platform admin, `/admin` |
@@ -192,7 +191,7 @@ Progress lives in `business_onboarding.last_step`, not in React state.
 
 ## 3 · Customers and CRM
 
-Sign in as `business@demo.com` — 1,240 customers, the best dataset for judging
+Sign in as `pro@demo.com` — 1,240 customers, the best dataset for judging
 whether the screens hold up.
 
 `/dashboard/customers`:
@@ -289,7 +288,7 @@ From `/pos`, or `/dashboard/customers/{id}` → **Award**.
 
 1. **Record a visit** — no amount. The balance rises by the visit rule.
 2. **Record a purchase** with an amount. On a **stamps** program that is one
-   stamp; on **points** it is the amount (1 point per €1). On Valencia Fitness
+   stamp; on **points** it is the amount (1 point per €1). On Sevilla Bakery
    (goal 500), a €42.50 purchase must credit **42 points, not 1**.
 3. **Watch what moves.** The balance, the progress ring, `visit_count`,
    `lifetime_spend`, `average_ticket`, `last_visit`, the ledger, the activity feed,
@@ -478,7 +477,7 @@ learns the feature exists, so they never upgrade.
 
 ### Authorized
 
-Sign in as `business@demo.com` and confirm every feature works. Then `pro@demo.com`
+Sign in as `pro@demo.com` and confirm every feature works. Then `growth@demo.com`
 and confirm everything except coalition, SSO and team management works.
 
 ### Unauthorized
@@ -557,7 +556,7 @@ This is the state that decides whether the product can charge at all.
 3. **A POS scan still works.** An existing customer at the counter gets their
    stamp. Losing a merchant's customers over a failed card is worse than losing
    the subscription.
-4. `/dashboard/billing` shows the wall and the $5 entry price.
+4. `/dashboard/billing` shows the wall and the $29 entry price.
 
 ### Upgrade, downgrade, cancel
 

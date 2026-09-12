@@ -1,4 +1,5 @@
 import type { TranslationKey } from '@/lib/i18n/dictionaries/en'
+import { ENTRY_PLAN, type PlanId } from '@/lib/billing/plans'
 import { templateForCategory } from '@/lib/wallet/card-templates'
 
 /**
@@ -194,6 +195,46 @@ export const DEFAULT_BUSINESS_TYPE = BY_KEY.get('other')!
 
 export function findBusinessType(category: string | null | undefined): BusinessType {
   return BY_KEY.get((category ?? '').toLowerCase()) ?? DEFAULT_BUSINESS_TYPE
+}
+
+/**
+ * Which plan to *suggest* for a trade. A suggestion, never a constraint.
+ *
+ * The only thing we know about a merchant at the plan step is what they sell, so
+ * the recommendation is made from the one thing that reliably follows from that:
+ * whether the trade tends to run one counter or several, and whether its
+ * marketing is a list of regulars or a segmented database.
+ *
+ *  - A café, bakery, barber, salon or pet shop is usually one shop with a few
+ *    hundred regulars. Starter is the honest answer, and recommending Growth to
+ *    them would be us upselling software they have not needed yet — which is the
+ *    fastest way to be the subscription they cancel in month two.
+ *  - A restaurant, bar, gym or retailer typically has a variable basket, a bigger
+ *    list, and either more than one site already or the intention to have one.
+ *    Growth is where segmentation, gift cards and per-site reporting live.
+ *
+ * Nobody is recommended Pro from a trade alone: Pro is a fact about how many
+ * locations somebody runs, and we do not know that yet. The upgrade prompt on the
+ * locations screen is where that conversation belongs, with real usage behind it.
+ *
+ * Lives here rather than in `lib/billing/plans.ts` on purpose. The catalogue
+ * defines what a tier *is*; which tier suits a barber is a fact about barbers.
+ */
+const PLAN_BY_TRADE: Record<string, PlanId> = {
+  cafe: 'starter',
+  bakery: 'starter',
+  barber: 'starter',
+  beauty: 'starter',
+  pet: 'starter',
+  other: 'starter',
+  restaurant: 'growth',
+  bar: 'growth',
+  gym: 'growth',
+  retail: 'growth',
+}
+
+export function recommendPlanFor(category: string | null | undefined): PlanId {
+  return PLAN_BY_TRADE[findBusinessType(category).key] ?? ENTRY_PLAN.id
 }
 
 /**

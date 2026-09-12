@@ -39,8 +39,17 @@ export async function assertDatabaseReady(): Promise<void> {
 
 let counter = 0
 
+/**
+ * @param label   Prefix for the slug and the owner's email.
+ * @param options `plan` and `subscriptionStatus` write `businesses.plan` and
+ *   `businesses.subscription_status` directly, which is what lets a test assert
+ *   entitlement behaviour on a specific tier. Defaults to a paying Growth
+ *   workspace, because most tests want a tenant that is not gated by anything and
+ *   Growth is the middle of the ladder.
+ */
 export async function createTenant(
-  label = 'test'
+  label = 'test',
+  options: { plan?: string; subscriptionStatus?: string | null; trialEndsAt?: string | null } = {}
 ): Promise<TestTenant> {
   counter += 1
   const unique = `${Date.now().toString(36)}${counter}`
@@ -64,8 +73,10 @@ export async function createTenant(
       currency: 'EUR',
       locale: 'en',
       timezone: 'Europe/Madrid',
-      plan: 'growth',
-      subscription_status: 'active',
+      plan: options.plan ?? 'growth',
+      subscription_status:
+        options.subscriptionStatus === undefined ? 'active' : options.subscriptionStatus,
+      trial_ends_at: options.trialEndsAt ?? null,
     })
     .select('id')
     .single()

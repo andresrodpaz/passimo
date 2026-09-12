@@ -1,7 +1,6 @@
 import 'server-only'
 import { getDb } from '@/lib/db'
 import { env } from '@/lib/env'
-import { signToken } from '@/lib/crypto'
 import { num } from '@/lib/domain/types'
 import { logger } from '@/lib/logger'
 import type { LatLng } from '@/lib/wallet/geo'
@@ -13,6 +12,7 @@ import { BRAND_KIT_COLUMNS, mapBrandKit } from '@/lib/brand/kit'
 import { getBusinessLocale } from '@/lib/i18n/business'
 import { createTranslator, type Translator } from '@/lib/i18n/translate'
 import { formatPassMonthYear, passLocaleTag } from '@/lib/wallet/pass-format'
+import { issueCardToken } from '@/lib/loyalty/card-token'
 import type {
   PassLabels,
   PassOffer,
@@ -135,7 +135,7 @@ export async function buildPassContent(
   const unitSingular = program?.unit_singular ?? unitPlural.replace(/s$/, '')
 
   const authenticationToken = await ensureAuthToken(customer)
-  const cardToken = signToken('card', { c: customer.id }, 60 * 60 * 24 * 365)
+  const cardToken = await issueCardToken(customer.id)
 
   const businessName = (business.name as string) ?? 'Loyalty'
 

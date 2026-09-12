@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/crypto'
 import { getDb } from '@/lib/db'
 import { suppress } from '@/lib/messaging/dispatch'
 import { badRequest } from '@/lib/errors'
+import { resolveLocale } from '@/lib/i18n/locales'
 import type { Channel } from '@/lib/domain/types'
 
 export const runtime = 'nodejs'
@@ -81,10 +82,10 @@ export const GET = defineRoute(
 
     const admin = getDb()
     const [{ data: business }, { data: customer }] = await Promise.all([
-      admin.from('businesses').select('name, logo_url').eq('id', payload.b).maybeSingle(),
+      admin.from('businesses').select('name, logo_url, locale').eq('id', payload.b).maybeSingle(),
       admin
         .from('customers')
-        .select('email, consent_email, consent_sms, consent_whatsapp, consent_push')
+        .select('email, locale, consent_email, consent_sms, consent_whatsapp, consent_push')
         .eq('id', payload.c)
         .maybeSingle(),
     ])
@@ -92,8 +93,24 @@ export const GET = defineRoute(
     if (!business || !customer) throw badRequest('This unsubscribe link is no longer valid')
 
     return {
-      business,
+      business: { name: business.name, logo_url: business.logo_url },
       email: customer.email,
+      /*
+       * The language the customer was *emailed* in, so the page they land on
+       * matches the message they clicked.
+       *
+       * Returned because this page has no other way to know. A customer arriving
+       * from an email has no locale cookie, so the client would fall back to the
+       * platform default — which meant a Spanish café's customer could click an
+       * unsubscribe link in a Spanish email and land on an English screen. On the
+       * one public page that is legally required to be comprehensible, that is
+       * not an acceptable default.
+       *
+       * Customer first, business second: `dispatchMessage` renders the message
+       * itself with exactly that precedence, so this resolves to whatever the
+       * email was actually written in.
+       */
+      locale: resolveLocale(customer.locale ?? business.locale),
       consents: {
         email: customer.consent_email,
         sms: customer.consent_sms,

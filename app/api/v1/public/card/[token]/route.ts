@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { defineRoute } from '@/lib/api/handler'
-import { verifyToken } from '@/lib/crypto'
+import { verifyCardToken } from '@/lib/loyalty/card-token'
 import { getDb } from '@/lib/db'
 import { getCustomerLoyalty } from '@/lib/loyalty/engine'
 import { badRequest, notFound } from '@/lib/errors'
@@ -27,8 +27,8 @@ export const GET = defineRoute(
     rateLimit: 'publicRelaxed',
   },
   async ({ params }) => {
-    const payload = verifyToken<{ c: string }>('card', params.token)
-    if (!payload?.c) throw badRequest('This link is invalid or has expired')
+    const payload = await verifyCardToken(params.token)
+    if (!payload) throw badRequest('This link is invalid or has expired')
 
     const admin = getDb()
     const { data: customer } = await admin
@@ -36,7 +36,7 @@ export const GET = defineRoute(
       .select(
         'id, business_id, name, first_name, last_name, email, referral_code, created_at, status, is_vip'
       )
-      .eq('id', payload.c)
+      .eq('id', payload.customerId)
       .maybeSingle()
 
     if (!customer || customer.status !== 'active') throw notFound('Card')

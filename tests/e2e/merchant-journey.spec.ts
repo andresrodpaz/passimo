@@ -52,6 +52,7 @@ async function signUp(request: APIRequestContext): Promise<Merchant | null> {
       timezone: 'Europe/Madrid',
       currency: 'EUR',
       locale: 'en',
+      acceptedTerms: true,
     },
   })
 
@@ -171,15 +172,36 @@ test.describe('merchant journey', () => {
     const joinBody = (await join.json()) as {
       joined: boolean
       card_url: string
-      apple_wallet_url: string
-      google_wallet_url: string
+      apple_wallet_url: string | null
+      google_wallet_url: string | null
     }
     expect(joinBody.joined).toBe(true)
-    // The three things the customer is handed. Wallet credentials may be absent
-    // on this deployment, but the URLs are the architecture and must exist.
     expect(joinBody.card_url).toContain('/card/')
-    expect(joinBody.apple_wallet_url).toContain('/api/v1/wallet/apple/')
-    expect(joinBody.google_wallet_url).toContain('/api/v1/wallet/google/')
+
+    /*
+     * A wallet URL is present exactly when that provider has credentials.
+     *
+     * This assertion used to demand both unconditionally, on the reasoning that
+     * "the URLs are the architecture and must exist" — which is exactly the
+     * mistake. Apple and Google are configured independently, and a URL for a
+     * provider with no certificate is a button that answers 503 on the last
+     * screen of the enrolment funnel. The honest contract is a link or a null,
+     * and the enrolment screen renders only the ones it is given.
+     */
+    const capabilities = (await (await request.get('/api/v1/health')).json()) as {
+      capabilities?: Record<string, boolean>
+    }
+    for (const [key, capability, prefix] of [
+      ['apple_wallet_url', 'appleWallet', '/api/v1/wallet/apple/'],
+      ['google_wallet_url', 'googleWallet', '/api/v1/wallet/google/'],
+    ] as const) {
+      const url = joinBody[key]
+      if (capabilities.capabilities?.[capability]) {
+        expect(url, `${capability} is configured, so its link must be offered`).toContain(prefix)
+      } else {
+        expect(url, `${capability} is not configured, so no link may be offered`).toBeNull()
+      }
+    }
 
     // The card page a customer actually opens has to render.
     const cardPage = await request.get(joinBody.card_url)

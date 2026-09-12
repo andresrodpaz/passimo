@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useWorkspace } from '@/lib/client/workspace'
 import { useStoredValue } from '@/lib/client/hooks'
-import { PLANS } from '@/lib/billing/plans'
+import { useI18n } from '@/lib/i18n'
+import { ENTRY_PLAN, PLANS, PLAN_CURRENCY } from '@/lib/billing/plans'
 
 /**
  * The one persistent billing message, at the top of the dashboard.
@@ -29,10 +30,11 @@ export function TrialBanner() {
   const { entitlements, can } = useWorkspace()
   const pathname = usePathname()
   const [dismissed, setDismissed] = useStoredValue('passimo.billingNoticeDismissed')
+  const i18n = useI18n()
 
   if (!entitlements || pathname?.startsWith('/dashboard/billing')) return null
 
-  const notice = resolveNotice(entitlements)
+  const notice = resolveNotice(entitlements, i18n)
   if (!notice) return null
   if (notice.dismissible && dismissed === notice.key) return null
 
@@ -80,7 +82,7 @@ export function TrialBanner() {
           size="icon"
           className="size-8 shrink-0"
           onClick={() => setDismissed(notice.key)}
-          aria-label="Dismiss"
+          aria-label={i18n.t('dashboard.billingNotice.dismiss')}
         >
           <X className="size-4" />
         </Button>
@@ -99,7 +101,8 @@ type Notice = {
 }
 
 function resolveNotice(
-  entitlements: NonNullable<ReturnType<typeof useWorkspace>['entitlements']>
+  entitlements: NonNullable<ReturnType<typeof useWorkspace>['entitlements']>,
+  { t, formatCurrency, formatDate }: ReturnType<typeof useI18n>
 ): Notice | null {
   const { trial, subscription, effective_plan } = entitlements
 
@@ -109,21 +112,25 @@ function resolveNotice(
     return {
       key: 'delinquent',
       severity: 'critical',
-      title: 'We could not take your payment',
-      body: 'Update your card to keep your plan. Your customers and history are safe either way.',
-      cta: 'Fix payment',
+      title: t('dashboard.billingNotice.delinquentTitle'),
+      body: t('dashboard.billingNotice.delinquentBody'),
+      cta: t('dashboard.billingNotice.delinquentCta'),
       dismissible: false,
     }
   }
 
   if (subscription.cancelAtPeriodEnd && subscription.currentPeriodEnd) {
-    const endsAt = new Date(subscription.currentPeriodEnd)
     return {
       key: `cancelling:${subscription.currentPeriodEnd}`,
       severity: 'warning',
-      title: `Your plan ends on ${endsAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}`,
-      body: 'Change your mind any time before then and nothing is interrupted.',
-      cta: 'Keep my plan',
+      title: t('dashboard.billingNotice.cancellingTitle', {
+        // The merchant's own locale formats the date. `toLocaleDateString` with
+        // no locale argument used the *browser's*, which is not necessarily the
+        // language the rest of the banner is in.
+        date: formatDate(subscription.currentPeriodEnd, { day: 'numeric', month: 'long' }),
+      }),
+      body: t('dashboard.billingNotice.cancellingBody'),
+      cta: t('dashboard.billingNotice.cancellingCta'),
       dismissible: true,
     }
   }
@@ -137,11 +144,16 @@ function resolveNotice(
         key: `trial:${days}`,
         severity: 'warning',
         title:
-          days <= 1
-            ? 'Your trial ends today'
-            : `Your trial ends in ${days} days`,
-        body: `Pick a plan to keep ${planName} features. Nothing is deleted if you do not — you simply move to Free.`,
-        cta: 'Choose a plan',
+          days <= 0
+            ? t('dashboard.billingNotice.endsToday')
+            : t('dashboard.billingNotice.endsInDays', { count: days }),
+        /*
+         * States what actually happens: the workspace lapses, every row stays,
+         * and reactivating is one click. It does not name a free plan, because
+         * there is no free plan to move to.
+         */
+        body: t('dashboard.billingNotice.endingBody', { plan: planName }),
+        cta: t('dashboard.billingNotice.endingCta'),
         dismissible: false,
       }
     }
@@ -150,9 +162,12 @@ function resolveNotice(
       return {
         key: `trial:${days}`,
         severity: 'info',
-        title: `${days} days left on your trial`,
-        body: `You are on ${planName} with everything switched on. No card needed until it ends.`,
-        cta: 'See plans',
+        title: t('dashboard.billingNotice.daysLeft', { count: days }),
+        body: t('dashboard.billingNotice.trialBody', {
+          plan: planName,
+          price: formatCurrency(ENTRY_PLAN.monthlyPrice ?? 0, { currency: PLAN_CURRENCY }),
+        }),
+        cta: t('dashboard.billingNotice.trialCta'),
         dismissible: true,
       }
     }

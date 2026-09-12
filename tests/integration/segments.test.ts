@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDb } from '@/lib/db'
 import { countSegment, listSegmentCustomerIds } from '@/lib/segments/resolve'
 import { compileSegment } from '@/lib/segments/compile'
-import type { SegmentDefinition } from '@/lib/segments/definition'
+import {
+  SEGMENT_OPERATORS,
+  type SegmentDefinition,
+  type SegmentField,
+  type SegmentOperator,
+} from '@/lib/segments/definition'
 import {
   assertDatabaseReady,
   createCustomer,
@@ -221,6 +226,109 @@ describe('segments resolve against real rows', () => {
   it('matches everybody for an empty definition, and only then', async () => {
     const all = await countSegment(tenant.businessId, { match: 'all', conditions: [] })
     expect(all).toBe(6)
+  })
+
+  /**
+   * Every operator, executed.
+   *
+   * The gap this closes: the tests above pick operators one at a time, and the
+   * ones nobody picked were broken. `in`, `not_in` and the tag predicates all
+   * compiled to `= any((select array_agg(v) …))` — the *subquery* form of
+   * `ANY`, applied to a single row of type `text[]`, which PostgreSQL refuses:
+   *
+   *     operator does not exist: text = text[]
+   *
+   * And because the resolver logged the failure and returned 0, the answer came
+   * back looking exactly like "no customers match" — so the built-in VIP segment
+   * read 0 against a workspace with 50 VIPs, and a merchant filtering by
+   * language or tag saw an empty table and believed it.
+   *
+   * A unit test cannot catch this: the compiled SQL had the right shape, and the
+   * PL/pgSQL functions were correct on their own. Only executing one against the
+   * other does. So this asserts nothing about *which* rows come back — the cases
+   * above do that — only that **every operator the UI can produce actually
+   * runs**. A throw here is the failure; a count of zero is fine.
+   */
+  it('executes every operator the segment builder can produce', async () => {
+    const samples: Array<{ field: SegmentField; operator: SegmentOperator; value?: unknown }> = [
+      { field: 'name', operator: 'eq', value: 'Regular A' },
+      { field: 'name', operator: 'neq', value: 'Regular A' },
+      { field: 'visit_count', operator: 'gt', value: 1 },
+      { field: 'visit_count', operator: 'gte', value: 1 },
+      { field: 'visit_count', operator: 'lt', value: 99 },
+      { field: 'visit_count', operator: 'lte', value: 99 },
+      { field: 'email', operator: 'contains', value: 'passimo' },
+      { field: 'email', operator: 'not_contains', value: 'nope' },
+      { field: 'email', operator: 'starts_with', value: 'regular' },
+      { field: 'locale', operator: 'in', value: ['en', 'es'] },
+      { field: 'locale', operator: 'not_in', value: ['fr'] },
+      { field: 'rfm_segment', operator: 'in', value: ['champion', 'loyal'] },
+      { field: 'rfm_segment', operator: 'not_in', value: ['at_risk'] },
+      { field: 'tag', operator: 'in', value: ['vip', 'regular'] },
+      { field: 'tag', operator: 'not_in', value: ['lapsed'] },
+      { field: 'is_vip', operator: 'is_true' },
+      { field: 'is_vip', operator: 'is_false' },
+      { field: 'phone', operator: 'is_set' },
+      { field: 'phone', operator: 'is_not_set' },
+      { field: 'last_visit', operator: 'within_days', value: 30 },
+      { field: 'last_visit', operator: 'before_days', value: 30 },
+      { field: 'birthday', operator: 'birthday_in_month' },
+      { field: 'birthday', operator: 'birthday_today' },
+      { field: 'birthday', operator: 'birthday_in_days', value: 7 },
+      { field: 'balance', operator: 'gte', value: 1 },
+      { field: 'reward_available', operator: 'is_true' },
+      { field: 'tier_level', operator: 'gte', value: 1 },
+    ]
+
+    // Every operator in the vocabulary must appear above, or a new one could be
+    // added to the UI and never executed by this test.
+    const covered = new Set(samples.map((sample) => sample.operator))
+    expect([...SEGMENT_OPERATORS].filter((operator) => !covered.has(operator))).toEqual([])
+
+    const failures: string[] = []
+    for (const sample of samples) {
+      const definition: SegmentDefinition = {
+        match: 'all',
+        conditions: [{ field: sample.field, operator: sample.operator, value: sample.value } as never],
+      }
+      try {
+        const count = await countSegment(tenant.businessId, definition)
+        expect(Number.isFinite(count)).toBe(true)
+        // The id listing runs a second function over the same predicate, so it
+        // carries the same risk and needs the same proof.
+        await listSegmentCustomerIds(tenant.businessId, definition, { limit: 10 })
+      } catch (error) {
+        failures.push(`${sample.field} ${sample.operator}: ${(error as Error).message}`)
+      }
+    }
+
+    expect(failures, failures.join('\n')).toEqual([])
+  })
+
+  it('agrees between the count and the audience for every operator', async () => {
+    /*
+     * The number a merchant reads and the people a campaign reaches come from
+     * two different database functions over one predicate. When they disagree,
+     * the product lies quietly — a reach of 468 that sends to nobody.
+     */
+    const definitions: SegmentDefinition[] = [
+      { match: 'all', conditions: [{ field: 'locale', operator: 'in', value: ['en', 'es'] }] },
+      { match: 'any', conditions: [
+        { field: 'is_vip', operator: 'is_true' },
+        { field: 'rfm_segment', operator: 'in', value: ['champion'] },
+      ] },
+      { match: 'all', conditions: [{ field: 'tag', operator: 'in', value: ['vip'] }] },
+    ]
+
+    for (const definition of definitions) {
+      const [count, ids] = await Promise.all([
+        countSegment(tenant.businessId, definition),
+        listSegmentCustomerIds(tenant.businessId, definition, { limit: 1000 }),
+      ])
+      expect(ids, JSON.stringify(definition)).toHaveLength(count)
+      // And the ids must be usable — the previous bug returned `undefined`s.
+      expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+    }
   })
 
   it('never lets a value reach the SQL text', async () => {

@@ -5,6 +5,7 @@ import { env } from '@/lib/env'
 import { payloadTooLarge, unprocessable } from '@/lib/errors'
 import { enqueue } from '@/lib/jobs/queue'
 import { guessMapping, parseCsv, IMPORT_FIELDS } from '@/lib/customers/import'
+import { measureLimit, requireWithinLimit } from '@/lib/billing/entitlements'
 import { recordAudit } from '@/lib/audit'
 
 export const runtime = 'nodejs'
@@ -71,6 +72,32 @@ export const POST = defineRoute(
         total_rows: rows.length,
         sample: rows.slice(0, 5),
       }
+    }
+
+    /*
+     * The customer cap, answered before a single row is queued.
+     *
+     * `POST /customers` has always enforced this one row at a time, and the
+     * public join page deliberately soft-limits it — a customer standing at the
+     * counter is never turned away to sell an upgrade. A bulk import is the
+     * opposite case: the *merchant* is acting, deliberately, on a file, and it is
+     * the one path that can take a 500-customer plan to twenty thousand rows in a
+     * single request. It was also the only one of the three with no check at all.
+     *
+     * Checked against the *file* rather than against `used + rows.length`, and
+     * that distinction matters: imports update rather than duplicate, so a
+     * merchant with 400 customers re-importing their own 400-row list creates
+     * nothing, and adding the two together would refuse them for exceeding a cap
+     * they were never going to cross. A file with more rows than the whole plan
+     * allows, on the other hand, cannot fit under any interpretation — so that is
+     * refused here, with the plan that would take it, before anything is queued.
+     *
+     * The precise accounting happens in the worker, which measures live headroom
+     * and only spends it on rows that turn out to be new people.
+     */
+    const allowance = await measureLimit(business.businessId, 'customers')
+    if (allowance.allowed !== null && rows.length > allowance.allowed) {
+      await requireWithinLimit(business.businessId, 'customers', rows.length)
     }
 
     const admin = getDb()

@@ -388,11 +388,18 @@ async function currentUsage(businessId: string, key: LimitKey): Promise<number> 
         return count ?? 0
       }
       case 'team_members': {
+        /*
+         * A pending invitation holds a seat. Counting only accepted members
+         * would let a tenant on three seats issue fifty invitations and then
+         * acquire fifty colleagues — the cap would bind at the moment it no
+         * longer mattered. Revoking an invite (`DELETE /api/v1/team`) deletes
+         * the row and releases the seat immediately.
+         */
         const { count } = await admin
           .from('team_members')
           .select('id', { count: 'exact', head: true })
           .eq('business_id', businessId)
-          .eq('status', 'active')
+          .in('status', ['active', 'invited'])
         return count ?? 0
       }
       /*

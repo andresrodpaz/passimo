@@ -90,7 +90,7 @@ const { t, locale, formatCurrency, formatNumber, formatDate, formatRelative } = 
 t('common.save')                                  // "Save" / "Guardar"
 t('common.upgradeToUse', { plan: 'Growth' })      // interpolation
 t('common.days', { count: 3 })                    // plurals, via Intl.PluralRules
-formatCurrency(19, { currency: 'USD' })           // "$19" / "19 $"
+formatCurrency(59, { currency: 'USD' })           // "$59" / "59 $"
 formatNumber(123456)                              // "123,456" / "123.456"
 formatRelative(someIso)                           // "3 days ago" / "hace 3 días"
 ```
@@ -136,8 +136,8 @@ build.
 ### A real bug this found
 
 `formatCurrency` used `Intl.NumberFormat` defaults. `en-GB` disambiguates a foreign
-currency by prefixing the country, so USD rendered as **`US$5`** — the pricing page read
-"From US$5/month" to every English visitor. Fixed with
+currency by prefixing the country, so USD rendered as **`US$29`** — the pricing page read
+"From US$29/month" to every English visitor. Fixed with
 `currencyDisplay: 'narrowSymbol'`.
 
 ---

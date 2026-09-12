@@ -63,6 +63,17 @@ export const updateCustomerSchema = z.object({
   locale: z.string().max(10).nullable().optional(),
   isVip: z.boolean().optional(),
   status: z.enum(['active', 'blocked']).optional(),
+  /**
+   * The complete tag set, replacing whatever is there.
+   *
+   * Absent means "leave tags alone"; `[]` means "remove them all". The
+   * distinction matters because this is the only write path a merchant has —
+   * tags used to be settable at enrolment and by CSV import and nowhere else,
+   * so the profile showed read-only badges, the `?tag=` list filter had no way
+   * to be populated, and the "Tag is one of" segment condition could never
+   * match anything a merchant had chosen.
+   */
+  tags: z.array(z.string().max(60)).max(20).optional(),
   consents: z
     .object({
       email: z.boolean().optional(),

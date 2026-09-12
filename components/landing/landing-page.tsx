@@ -29,7 +29,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageToggle, LanguageLinks } from '@/components/language-toggle'
 import { BrandMark } from '@/components/brand-mark'
 import { ProductDemo } from '@/components/landing/product-demo'
-import { PricingTable } from '@/components/landing/pricing-table'
+import { PricingFaq, PricingTable } from '@/components/landing/pricing-table'
 import { WalletSection } from '@/components/landing/wallet-section'
 import { CardPreview, type CardPreviewData } from '@/components/wallet/card-preview'
 import { useI18n } from '@/lib/i18n'
@@ -77,7 +77,7 @@ export type LandingPageProps = {
 
 export function LandingPage({ siteHost, contactEmail }: LandingPageProps) {
   const { formatCurrency } = useI18n()
-  const entryPrice = formatCurrency(ENTRY_PLAN.monthlyPrice ?? 5, { currency: PLAN_CURRENCY })
+  const entryPrice = formatCurrency(ENTRY_PLAN.monthlyPrice ?? 0, { currency: PLAN_CURRENCY })
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,7 +91,7 @@ export function LandingPage({ siteHost, contactEmail }: LandingPageProps) {
         <HowItWorks />
         <DashboardShowcase siteHost={siteHost} />
         <Comparison entryPrice={entryPrice} />
-        <Pricing />
+        <Pricing entryPrice={entryPrice} />
         <FinalCta />
       </main>
       <SiteFooter contactEmail={contactEmail} />
@@ -656,7 +656,14 @@ function Comparison({ entryPrice }: { entryPrice: string }) {
       labelKey: 'landing.compare.rows.cost',
       us: t('landing.compare.rows.costUs', { price: entryPrice }),
       paper: t('landing.compare.rows.costPaper'),
-      app: t('landing.compare.rows.costApp', { price: '$29' }),
+      /*
+       * No number here any more. It used to read "$29 and up", which was both an
+       * unsourced claim about somebody else's price list and — now that Starter
+       * is $29 — a line that made our own entry tier look like the expensive
+       * option. What is actually true of the category is the shape of the deal,
+       * not a figure we cannot cite.
+       */
+      app: t('landing.compare.rows.costApp'),
       enterprise: t('landing.compare.rows.costEnterprise'),
     },
     {
@@ -823,7 +830,7 @@ function ComparisonCell({
 // Pricing + CTA + footer
 // -----------------------------------------------------------------------------
 
-function Pricing() {
+function Pricing({ entryPrice }: { entryPrice: string }) {
   const { t } = useI18n()
 
   return (
@@ -831,10 +838,11 @@ function Pricing() {
       <div className="mx-auto max-w-6xl">
         <SectionHeading
           title={t('landing.pricing.title')}
-          subtitle={t('landing.pricing.subtitle')}
+          subtitle={t('landing.pricing.subtitle', { price: entryPrice })}
         />
         <div className="mt-10">
           <PricingTable />
+          <PricingFaq />
         </div>
       </div>
     </section>

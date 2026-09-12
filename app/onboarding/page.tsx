@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
+import { JoinQr } from '@/components/join/join-qr'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -37,6 +37,7 @@ import {
   CARD_PALETTES,
   findBusinessType,
   goalsFor,
+  recommendPlanFor,
   unitKeysFor,
   type BusinessType,
 } from '@/lib/onboarding/presets'
@@ -51,7 +52,13 @@ import { placeholderBrandKit } from '@/lib/brand/kit'
 import { toastError } from '@/lib/client/api-errors'
 import { useI18n } from '@/lib/i18n'
 import type { TranslationKey } from '@/lib/i18n'
-import { PLAN_CURRENCY, PUBLIC_PLANS, type PlanId } from '@/lib/billing/plans'
+import {
+  PLANS,
+  PLAN_CURRENCY,
+  PUBLIC_PLANS,
+  TRIAL_PLAN,
+  type PlanId,
+} from '@/lib/billing/plans'
 import { cn } from '@/lib/utils'
 
 /**
@@ -579,6 +586,7 @@ function SetupWizard({
           <PlanStep
             businessId={businessId}
             businessName={loaded.name}
+            category={loaded.category}
             onContinue={() => setStep(hasLocation ? 'card' : 'shop')}
             onBack={() => setStep('program')}
           />
@@ -896,25 +904,38 @@ function ProgramStep({
  * Checkout is offered but never required: the trial is already running, and a
  * card form between a merchant and their first customer is the single most
  * expensive screen a loyalty product can have. On a deployment with no Stripe
- * credentials the step says so plainly and continues, rather than showing four
+ * credentials the step says so plainly and continues, rather than showing three
  * buttons that would all fail.
+ *
+ * The recommendation comes from the trade they chose on the previous screen, not
+ * from whichever tier we would most like to sell. A café is pointed at Starter,
+ * and it is marked "Recommended for you" with the reason attached — because a
+ * badge on the most expensive card that appears no matter what the merchant said
+ * is not a recommendation, it is a default, and merchants can tell.
+ *
+ * Every card shows its three caps and the "you can change this later" line. The
+ * decision we want here is a *cheap* one; fear of picking wrong is what makes
+ * people pick nothing.
  */
 function PlanStep({
   businessId,
   businessName,
+  category,
   onContinue,
   onBack,
 }: {
   businessId: string
   businessName: string
+  category: string | null
   onContinue: () => void
   onBack: () => void
 }) {
-  const { t, formatCurrency } = useI18n()
+  const { t, formatCurrency, formatNumber } = useI18n()
   const [busy, setBusy] = React.useState<PlanId | null>(null)
   const billing = useApi<BillingResponse>(`/api/v1/billing${query({ businessId })}`)
 
-  const recommended: PlanId = 'growth'
+  const recommended = recommendPlanFor(category)
+  const tradeLabel = t(findBusinessType(category).labelKey).toLowerCase()
 
   async function choose(plan: PlanId) {
     setBusy(plan)
@@ -945,7 +966,9 @@ function PlanStep({
       <h1 className="text-xl font-semibold tracking-tight">
         {t('onboarding.plan.title', { businessName })}
       </h1>
-      <p className="mt-1 text-sm text-muted-foreground">{t('onboarding.plan.subtitle')}</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t('onboarding.plan.subtitle', { trialPlan: PLANS[TRIAL_PLAN].name })}
+      </p>
 
       {billing.data && !configured && (
         <p className="mt-4 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -953,11 +976,11 @@ function PlanStep({
         </p>
       )}
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      <div className="mt-6 grid items-start gap-3 sm:grid-cols-3">
         {PUBLIC_PLANS.map((plan) => (
           <article
             key={plan.id}
-            className={`flex flex-col rounded-xl border p-4 ${
+            className={`flex h-full flex-col rounded-xl border p-4 ${
               plan.id === recommended ? 'border-primary/60 shadow-sm' : ''
             }`}
           >
@@ -969,15 +992,36 @@ function PlanStep({
                 </Badge>
               )}
             </div>
-            <p className="mt-1 flex-1 text-xs text-muted-foreground">{t(plan.taglineKey)}</p>
-            <p className="mt-3 text-lg font-semibold tabular-nums">
-              {plan.monthlyPrice === null
-                ? '—'
-                : formatCurrency(plan.monthlyPrice, { currency: PLAN_CURRENCY })}
+
+            <p className="mt-2 text-2xl font-semibold tabular-nums">
+              {formatCurrency(plan.monthlyPrice ?? 0, { currency: PLAN_CURRENCY })}
               <span className="text-xs font-normal text-muted-foreground">
-                {t('common.perMonth')}
+                {t('onboarding.plan.perMonth')}
               </span>
             </p>
+
+            <p className="mt-1 text-xs text-muted-foreground">{t(plan.taglineKey)}</p>
+
+            {plan.id === recommended && (
+              <p className="mt-1.5 text-xs font-medium text-primary">
+                {t('onboarding.plan.recommendedWhy', { category: tradeLabel })}
+              </p>
+            )}
+
+            {/* The three caps a merchant checks, read from the catalogue so this
+                screen cannot promise a limit the API does not honour. */}
+            <ul className="mt-3 flex-1 space-y-1 text-xs text-muted-foreground">
+              <li>
+                {plan.limits.customers === null
+                  ? t('onboarding.plan.limits.customersUnlimited')
+                  : t('onboarding.plan.limits.customers', {
+                      count: formatNumber(plan.limits.customers),
+                    })}
+              </li>
+              <li>{t('onboarding.plan.limits.locations', { count: plan.limits.locations ?? 0 })}</li>
+              <li>{t('onboarding.plan.limits.team', { count: plan.limits.team_members ?? 0 })}</li>
+            </ul>
+
             <Button
               variant={plan.id === recommended ? 'default' : 'outline'}
               size="sm"
@@ -991,6 +1035,8 @@ function PlanStep({
           </article>
         ))}
       </div>
+
+      <p className="mt-3 text-xs text-muted-foreground">{t('onboarding.plan.changeLater')}</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 border-t pt-5">
         <Button variant="outline" className="h-11 gap-2" onClick={onBack}>
@@ -1318,13 +1364,12 @@ function ReadyStep({
               <p className="mt-1 text-sm text-muted-foreground">{t('onboarding.ready.qrBody')}</p>
 
               <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-                <Image
-                  src={`/api/v1/public/qr?data=${encodeURIComponent(joinUrl)}&size=512`}
+                <JoinQr
+                  joinUrl={joinUrl}
+                  size={168}
+                  renderSize={512}
                   alt={t('onboarding.ready.qrAlt')}
-                  width={168}
-                  height={168}
-                  unoptimized
-                  className="shrink-0 rounded-lg border bg-white p-3"
+                  className="p-3"
                 />
 
                 <div className="w-full min-w-0 space-y-3">

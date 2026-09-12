@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { num } from '@/lib/domain/types'
 import { env } from '@/lib/env'
-import { TRIAL_EXPIRED_PLAN, isPurchasablePlan } from '@/lib/billing/plans'
+import { TRIAL_EXPIRED_PLAN, isPurchasablePlan, normalizePlanId } from '@/lib/billing/plans'
 
 /**
  * Referral reporting and configuration.
@@ -265,7 +265,16 @@ export function isReferralConverted(
   plan: unknown,
   subscriptionStatus: string | null | undefined
 ): boolean {
-  return subscriptionStatus === 'active' && isPurchasablePlan(plan)
+  /*
+   * Normalised before the purchasability check, so a row still holding a legacy
+   * identifier is judged on the tier it resolves to rather than on the spelling.
+   * Without this, a merchant whose row says `business` — a real $99 subscriber
+   * from the previous catalogue — stops counting as converted the moment the
+   * catalogue is renamed, and their referrer's credit silently disappears from
+   * the summary screen.
+   */
+  const resolved = normalizePlanId(plan)
+  return subscriptionStatus === 'active' && isPurchasablePlan(resolved)
 }
 
 /**

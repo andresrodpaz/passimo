@@ -1,8 +1,10 @@
 import 'server-only'
 import { getDb } from '@/lib/db'
+import { addCustomerTags } from '@/lib/customers/tags'
 import { logger } from '@/lib/logger'
 import { enqueue } from '@/lib/jobs/queue'
 import { placeholderEmailForPhone } from '@/lib/customers/placeholder-email'
+import { measureLimit } from '@/lib/billing/entitlements'
 
 /**
  * CSV customer import.
@@ -90,6 +92,15 @@ export type ImportSummary = {
   imported: number
   updated: number
   skipped: number
+  /**
+   * Rows that would have been new customers but did not fit the plan.
+   *
+   * Reported separately from `skipped` because it is the only skip reason that is
+   * not the merchant's data being wrong. A file with 200 unfittable rows and a
+   * file with 200 malformed ones need different sentences, and lumping them
+   * together sends a merchant hunting for a formatting problem that is not there.
+   */
+  limited: number
   errors: Array<{ row: number; reason: string }>
 }
 
@@ -102,7 +113,7 @@ export async function importCustomerRows(input: {
   mapping: Record<string, ImportField | string>
 }): Promise<ImportSummary> {
   const admin = getDb()
-  const summary: ImportSummary = { imported: 0, updated: 0, skipped: 0, errors: [] }
+  const summary: ImportSummary = { imported: 0, updated: 0, skipped: 0, limited: 0, errors: [] }
 
   await admin
     .from('customer_imports')
@@ -115,6 +126,29 @@ export async function importCustomerRows(input: {
     .eq('business_id', input.businessId)
     .eq('is_default', true)
     .maybeSingle()
+
+  /*
+   * How many *new* customers this chunk is still allowed to create.
+   *
+   * The route refuses a file larger than the plan outright, but that check
+   * cannot answer the interesting case: a 400-row file against a 500-customer
+   * plan that already holds 400 people. Counting rows there would refuse a
+   * merchant re-importing their own list — imports update rather than duplicate,
+   * so most of those rows create nothing — and counting nothing would let two
+   * such files put a $29 plan at 800.
+   *
+   * So headroom is measured once per chunk against live rows, and only spent by
+   * enrolments that actually came back `is_new`. Updates are free, which is both
+   * correct and the behaviour a merchant expects from a re-import.
+   *
+   * `null` is unlimited. Nothing in the current catalogue is, but the resolution
+   * has to be right if that changes rather than silently becoming zero.
+   */
+  const allowance = await measureLimit(input.businessId, 'customers')
+  let headroom =
+    allowance.allowed === null
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, allowance.allowed - allowance.used)
 
   for (const [index, raw] of input.rows.entries()) {
     const rowNumber = index + 2 // account for the header line
@@ -134,6 +168,30 @@ export async function importCustomerRows(input: {
 
       const email =
         record.email ?? placeholderEmailForPhone(record.phone!)
+
+      /*
+       * Out of headroom. This row is only refused if it would create somebody
+       * new, so the lookup happens here — once headroom is gone — rather than on
+       * every row of every import. An update still goes through: a merchant over
+       * their cap after a downgrade must still be able to correct a phone number.
+       */
+      if (headroom <= 0) {
+        const { data: existing } = await admin
+          .from('customers')
+          .select('id')
+          .eq('business_id', input.businessId)
+          .eq('email', email)
+          .maybeSingle()
+
+        if (!existing) {
+          summary.limited += 1
+          summary.errors.push({
+            row: rowNumber,
+            reason: `Plan limit reached (${allowance.allowed} customers). Upgrade to import the rest — nothing already imported is affected.`,
+          })
+          continue
+        }
+      }
 
       const { data: result, error } = await admin.rpc('passimo_enroll_customer', {
         p_business_id: input.businessId,
@@ -161,8 +219,13 @@ export async function importCustomerRows(input: {
 
       if (error) throw error
       const payload = result as { is_new: boolean; customer_id: string }
-      if (payload.is_new) summary.imported += 1
-      else summary.updated += 1
+      if (payload.is_new) {
+        summary.imported += 1
+        // Only an actual enrolment spends the allowance. Updates are free.
+        headroom -= 1
+      } else {
+        summary.updated += 1
+      }
 
       // Carry over the balance the merchant already owes their customers —
       // people must not lose progress when a business switches to Passimo.
@@ -185,7 +248,9 @@ export async function importCustomerRows(input: {
           .eq('id', payload.customer_id)
       }
 
-      if (record.tags?.length) await applyTags(input.businessId, payload.customer_id, record.tags)
+      if (record.tags?.length) {
+        await addCustomerTags(input.businessId, payload.customer_id, record.tags)
+      }
 
       if (record.notes) {
         await admin.from('customer_notes').insert({
@@ -214,7 +279,10 @@ export async function importCustomerRows(input: {
       status: 'completed',
       imported_rows: summary.imported,
       updated_rows: summary.updated,
-      skipped_rows: summary.skipped,
+      // Rows refused by the plan are skips as far as the stored row count goes;
+      // the reason is in `errors`, and `limited` distinguishes them in the return
+      // value the job result carries.
+      skipped_rows: summary.skipped + summary.limited,
       errors: summary.errors.slice(0, 200),
       completed_at: new Date().toISOString(),
     })
@@ -353,24 +421,6 @@ function parseDate(value: string): string | undefined {
   if (month < 1 || month > 12 || day < 1 || day > 31) return undefined
 
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-}
-
-async function applyTags(businessId: string, customerId: string, tags: string[]) {
-  const admin = getDb()
-  for (const name of tags) {
-    const { data: tag } = await admin
-      .from('tags')
-      .upsert({ business_id: businessId, name }, { onConflict: 'business_id,name' })
-      .select('id')
-      .maybeSingle()
-    if (!tag) continue
-    await admin
-      .from('customer_tags')
-      .upsert(
-        { customer_id: customerId, tag_id: tag.id, business_id: businessId },
-        { onConflict: 'customer_id,tag_id', ignoreDuplicates: true }
-      )
-  }
 }
 
 /**

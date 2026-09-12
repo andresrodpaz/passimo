@@ -170,14 +170,14 @@ Every mandatory requirement, and where it lives.
 | Features section with icons and animations | Done | Six cards |
 | Comparison vs paper / generic apps / enterprise | Done | Honest table, scrolls in its own container |
 | How it works, 3 steps | Done | |
-| Pricing redesigned, free plan removed, starts at $5 | Done | `lib/billing/plans.ts` |
+| Pricing redesigned, free plan removed, three tiers at $29 / $59 / $99 | Done | `lib/billing/plans.ts`, `docs/PRICING.md`, `PRICING_AUDIT.md` |
 | Real subscription logic | Done | Stripe + entitlements + `lapsed` state |
-| Meaningful feature limits per plan | Done | 8 limit keys × 4 tiers, monotonic (test-enforced) |
+| Meaningful feature limits per plan | Done | 8 limit keys × 3 tiers, monotonic, and cap-zero ⇔ feature-absent (both test-enforced) |
 | Feature gating across the application | Done | `requireFeature` / `requireWithinLimit` / `has()` / `can()` |
 | Dashboard adapts to plan | Done | Locked nav items, upgrade prompts, gated tabs |
 | Demo data (businesses, customers, transactions, visits, points, rewards, campaigns, analytics, wallet passes, QR history, notifications) | Done | `scripts/seed-demo.ts` |
-| One demo merchant per plan | Done | `starter@`/`growth@`/`pro@`/`business@demo.com` |
-| Super admin account | Done | `admin@demo.com` → `/admin` |
+| One demo merchant per plan | Done | `starter@`/`growth@`/`pro@demo.com`, plus `trial@`/`lapsed@` |
+| Super admin account | Done | `admin@passimo.demo` → `/admin` |
 | Admin: plans, businesses, impersonation, analytics, wallet, AI, subscriptions | Done | `/admin`, four tabs |
 | UI quality: spacing, typography, animation, loading/empty states, microinteractions, mobile | Done | Reduced-motion honoured; every list has loading/empty/error states |
 
@@ -211,11 +211,15 @@ Every mandatory requirement, and where it lives.
 - **Priority:** Low
 - **Last updated:** 2026-07-31
 
-### Subscriptions & Feature Gating
-- **Status:** Completed — **97%**. Free plan removed; Starter $5 / Growth $19 / Pro $49 / Business $99. `lapsed` modelled as a non-purchasable tier so the existing entitlement machinery gates it with no special cases. Legacy `free`/`enterprise` values mapped in both the migration and the resolver. This session: dunning — a declined card is now a sequence with four warnings rather than a silence followed by a workspace going quiet — and the plan catalogue's copy moved to dictionary keys, because the Spanish pricing page had been advertising in English.
-- **Remaining:** Proration UI, still delegated to the Stripe portal, which handles it correctly.
-- **Priority:** Low
-- **Last updated:** 2026-08-10
+### Subscriptions, pricing & feature gating
+- **Status:** Completed — **99%**. **Pricing v2:** three tiers at Starter $29 / Growth $59 / Pro $99, no free plan, 14-day trial on Growth. `lapsed` modelled as a non-purchasable tier so the existing entitlement machinery gates it with no special cases. Legacy `free` / `enterprise` / `business` mapped in both migration `000024_pricing_v2.sql` and the resolver.
+
+  This session did four things beyond moving the prices. **Starter became a product**: campaigns, automations, segments and a real AI allowance moved onto the $29 tier, because a café that cannot contact its own list is collecting customers rather than retaining them. **Four features that did not exist were removed** — `sso`, `api_access`, `webhooks`, `team_management` were sold on the old top tier and checked by no route. **Three caps that were enforced by nothing now are**: campaign sends were never checked or counted, marketing messages were counted but never checked, and the CSV importer had no customer cap at all. And **the daily AI insight sweep was gated and metered** — it had been running for every workspace regardless of plan or allowance.
+
+  Verified: 694 unit, 116 integration against real Postgres, 46 e2e across desktop and mobile, `verify:functional` at 821 pass / 0 warn / 0 fail, and a 19-case adversarial probe confirming no forged plan in a body, query string, header or cookie changes the answer.
+- **Remaining:** The message meter is channel-blind — one `messages_per_month` for email, SMS and WhatsApp. Fine while only email is configured; **must be split by channel before SMS ships**, because 50,000 SMS against a $99 subscription is ~$2,000. Also: `team_members` is capped and displayed but has no write path to enforce (no invite endpoint exists), and live Stripe is unverified because no key is configured. All three recorded in `PRICING_AUDIT.md` §17.
+- **Priority:** Medium — the channel split is a half-day and blocks one feature.
+- **Last updated:** 2026-09-07
 
 ### Landing Page & Marketing Site
 - **Status:** Completed — **95%**. Every fabricated claim removed. Hero with a wallet card and the lock-screen notification it produces; a four-panel interactive demo sharing one state object; features; how-it-works; dashboard showcase; honest comparison table; generated pricing; final CTA.
@@ -653,9 +657,10 @@ enforced by the compiler rather than intended by convention.
   funnel, the template gallery).
 - **Customer-side proximity.** Web geofencing on the card page, reaching the ~half of
   customers who never install a pass, with consent copy shown *before* the browser prompt.
-- **Subscriptions.** Free plan removed; Starter $5 / Growth $19 / Pro $49 / Business $99.
-  `lapsed` introduced as a non-purchasable tier. Legacy `free`/`enterprise` mapped in both
-  the migration and the resolver. Two new limit keys.
+- **Subscriptions.** Free plan removed; the catalogue is now three tiers at Starter $29 /
+  Growth $59 / Pro $99 (pricing v2, September 2026 — see `PRICING_AUDIT.md`). `lapsed`
+  introduced as a non-purchasable tier. Legacy `free` / `enterprise` / `business` mapped in
+  both the migration and the resolver.
 - **Landing page.** Rewritten. Hero with the wallet card and the lock-screen notification
   it produces; four-panel interactive demo sharing one state object; features; how it
   works; dashboard showcase; honest comparison table; generated pricing; final CTA.

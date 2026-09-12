@@ -3,7 +3,13 @@ import { logger } from '@/lib/logger'
 import { error, json } from '@/lib/http'
 import { verifyWebhook, type StripeEvent } from '@/lib/billing/stripe'
 import { applyPlan, invalidateEntitlements } from '@/lib/billing/entitlements'
-import { PLANS, TRIAL_EXPIRED_PLAN, normalizePlanId, type PlanId } from '@/lib/billing/plans'
+import {
+  PLANS,
+  PUBLIC_PLANS,
+  TRIAL_EXPIRED_PLAN,
+  normalizePlanId,
+  type PlanId,
+} from '@/lib/billing/plans'
 import { notify } from '@/lib/notifications'
 import { enqueue } from '@/lib/jobs/queue'
 import { creditMerchantReferral } from '@/lib/growth/referrals'
@@ -257,15 +263,22 @@ function planFrom(subscription: StripeObject): PlanId {
   const declared = normalizePlanId(metadata.plan)
   if (declared) return declared
 
-  // Fall back to the price id → plan mapping in the environment, so a
-  // subscription created outside our checkout (sales-assisted, imported) still
-  // resolves to the right tier.
+  /*
+   * Fall back to the price id → plan mapping in the environment, so a
+   * subscription created outside our checkout (sales-assisted, imported) still
+   * resolves to the right tier.
+   *
+   * Derived from `PUBLIC_PLANS` rather than a literal list. The list used to be
+   * written out by hand and included `business`, which meant adding or removing
+   * a tier needed an edit in a file nobody thinks about during a pricing change
+   * — and a missed edit here resolves a real, paid subscription to `lapsed`.
+   */
   const priceId = firstPriceId(subscription)
   if (priceId) {
-    for (const candidate of ['starter', 'growth', 'pro', 'business'] as const) {
+    for (const candidate of PUBLIC_PLANS) {
       for (const interval of ['MONTHLY', 'YEARLY'] as const) {
-        if (process.env[`STRIPE_PRICE_${candidate.toUpperCase()}_${interval}`] === priceId) {
-          return candidate
+        if (process.env[`STRIPE_PRICE_${candidate.id.toUpperCase()}_${interval}`] === priceId) {
+          return candidate.id
         }
       }
     }

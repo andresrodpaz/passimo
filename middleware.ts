@@ -36,9 +36,38 @@ const SESSIONLESS_PREFIXES = [
   '/api/v1/health',
 ]
 
+/**
+ * URLs people type, or paste, that we do not serve a page at.
+ *
+ * Every one of these 404'd. None of them was a *broken link* — nothing in the
+ * product pointed at them — which is exactly why they survived: a link checker
+ * finds dead links, and cannot find a URL a human would guess. `/pricing` is the
+ * most-guessed path on any SaaS site, and `/terms`, `/privacy` and `/cookies` are
+ * the canonical short forms that end up in a Stripe checkout configuration, an
+ * app-store listing or an email footer written by somebody who did not check.
+ *
+ * 308 rather than 307, and permanent rather than a rewrite: these are canonical
+ * redirects to a real address, so a crawler should collapse them and a browser
+ * should remember them. The pricing section lives on the landing page, so its
+ * target is the fragment.
+ */
+const CANONICAL_REDIRECTS: Record<string, string> = {
+  '/pricing': '/#pricing',
+  '/plans': '/#pricing',
+  '/terms': '/legal/terms',
+  '/privacy': '/legal/privacy',
+  '/cookies': '/legal/cookies',
+  '/legal': '/legal/terms',
+}
+
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request })
   const { pathname } = request.nextUrl
+
+  const canonical = CANONICAL_REDIRECTS[pathname.replace(/\/+$/, '') || '/']
+  if (canonical) {
+    return NextResponse.redirect(new URL(canonical, request.url), 308)
+  }
 
   if (SESSIONLESS_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return withSecurityHeaders(response, request)

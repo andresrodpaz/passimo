@@ -2,8 +2,7 @@ import 'server-only'
 import { getDb } from '@/lib/db'
 import { notFound } from '@/lib/errors'
 import { num, numOrNull, type Customer, type RfmSegment } from '@/lib/domain/types'
-import { compileSegment } from '@/lib/segments/compile'
-import { resolveSegmentDefinition } from '@/lib/segments/resolve'
+import { listSegmentCustomerIds, resolveSegmentDefinition } from '@/lib/segments/resolve'
 
 /**
  * Customer reads.
@@ -47,20 +46,23 @@ export async function listCustomers(options: ListCustomersOptions): Promise<{
 }> {
   const admin = getDb()
 
-  // A saved segment narrows the id set first; everything else is expressed as
-  // a normal filtered query so Postgres can use the indexes.
+  /*
+   * A saved segment narrows the id set first; everything else is expressed as a
+   * normal filtered query so Postgres can use the indexes.
+   *
+   * Resolved through `listSegmentCustomerIds` rather than by calling the RPC
+   * again here. This function used to hold its own copy of that call, reading
+   * the result as `rows.map((row) => row.id)` — and because a single-column
+   * `returns table` arrives as bare strings, every id was `undefined` and
+   * `.in('id', …)` matched nothing. Filtering the customer list by any segment
+   * returned an empty table while the segments screen, counting through a
+   * different function, showed hundreds. One implementation cannot disagree
+   * with itself.
+   */
   let segmentIds: string[] | null = null
   if (options.segmentId) {
     const definition = await resolveSegmentDefinition(options.businessId, options.segmentId)
-    const { sql, params } = compileSegment(definition)
-    const { data } = await admin.rpc('passimo_segment_customer_ids', {
-      p_business_id: options.businessId,
-      p_predicate: sql,
-      p_params: params,
-      p_limit: 20000,
-      p_offset: 0,
-    })
-    const ids = (data ?? []).map((row: { id: string }) => row.id)
+    const ids = await listSegmentCustomerIds(options.businessId, definition, { limit: 20_000 })
     if (ids.length === 0) return { customers: [], total: 0 }
     segmentIds = ids
   }
@@ -86,11 +88,19 @@ export async function listCustomers(options: ListCustomersOptions): Promise<{
   }
 
   if (options.tag) {
+    /*
+     * `ilike`, not `eq`. Tags are a case-insensitive identity — the writer
+     * reuses an existing "wholesale" when somebody types "Wholesale" — so an
+     * exact match here would let a merchant pick a tag from their own list and
+     * be shown nobody. The value is escaped because `ilike` treats `%` and `_`
+     * as wildcards and a tag may legitimately contain either.
+     */
+    const pattern = options.tag.replace(/([\\%_])/g, '\\$1')
     const { data: tagged } = await admin
       .from('customer_tags')
       .select('customer_id, tags!inner(name)')
       .eq('business_id', options.businessId)
-      .eq('tags.name', options.tag)
+      .ilike('tags.name', pattern)
       .limit(20000)
     const ids = (tagged ?? []).map((row) => row.customer_id as string)
     if (ids.length === 0) return { customers: [], total: 0 }

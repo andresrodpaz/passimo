@@ -17,13 +17,41 @@ Current state, all four run against this tree on 2026-09-04:
 
 | Suite | Result |
 | --- | --- |
-| Unit — `pnpm test` | **667 passed, 27 files** |
-| Integration — `pnpm test:integration` | **82 passed, 5 files** |
-| End-to-end — `pnpm test:e2e` | **179 passed, 1 skipped**, both viewports, against a production build and a live database |
+| Unit — `pnpm test` | **680 passed, 29 files** |
+| Integration — `pnpm test:integration` | **92 passed, 7 files** |
+| End-to-end — `pnpm test:e2e` | **214 passed, 4 skipped**, both viewports, against a production build and a live database |
+| `pnpm db:verify` | **252 pass, 25 warnings, 0 fail** |
 | `pnpm typecheck`, `pnpm lint` | Clean |
 
-The single skip is `wallet-card-designer.spec.ts`'s mobile-only assertion under
-the desktop projection, which is the correct outcome rather than a gap.
+The skips are viewport-specific tests under the opposite projection, which is the
+correct outcome rather than a gap.
+
+### The two suites that exist because a green run proved nothing
+
+Both were added on 2026-09-05 after a merchant acceptance pass found three
+defects that every existing test passed straight through.
+
+**`tests/integration/segments.test.ts` — every operator, executed.** The unit
+suite asserted the *shape* of the compiled SQL, and the SQL functions were
+correct on their own; only running one against the other showed that every "is
+one of" condition failed with `operator does not exist: text = text[]`. Because
+the resolver logged and returned 0, it looked like "no customers match". The test
+now executes every operator the segment builder can produce and fails on a throw,
+not on a count.
+
+**`tests/e2e/merchant-acceptance.spec.ts` — the journey as a person.** Asks what
+a merchant would ask: can I tell what this does, can I find the thing, does the
+number mean anything, does it work on the phone I own, is any of it still in the
+wrong language. A suite can be green while a button is impossible to find.
+
+### Guarding a bug class rather than a bug
+
+`tests/unit/db-rpc-shapes.test.ts` is structural. A single-column
+`returns table (id uuid)` is flattened by PostgreSQL to `setof uuid`, so it
+arrives as bare strings — and three call sites read `.id` off them, producing
+arrays of `undefined` that matched nobody. The test asserts the helper handles
+both shapes **and** that no code within fourteen lines of an `.rpc(` call reads
+`.id` off the result again.
 
 ---
 

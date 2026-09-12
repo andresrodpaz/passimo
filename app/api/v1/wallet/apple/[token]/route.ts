@@ -1,4 +1,4 @@
-import { verifyToken } from '@/lib/crypto'
+import { verifyCardToken } from '@/lib/loyalty/card-token'
 import { error } from '@/lib/http'
 import { logger } from '@/lib/logger'
 import { isValidLatLng } from '@/lib/wallet/geo'
@@ -20,8 +20,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params
 
-  const payload = verifyToken<{ c: string }>('card', token)
-  if (!payload?.c) return error('This wallet link is invalid or has expired', 403, 'forbidden')
+  const payload = await verifyCardToken(token)
+  if (!payload) return error('This wallet link is invalid or has expired', 403, 'forbidden')
 
   const service = walletService()
   if (!service.provider('apple')?.status().configured) {
@@ -32,7 +32,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     // When the card page has already asked for location, the nearest store is
     // ordered first — Apple embeds at most ten, and for a chain the ten that
     // matter are the ten near the customer.
-    const artifact = await service.issue('apple', payload.c, { near: positionFrom(request) })
+    const artifact = await service.issue('apple', payload.customerId, { near: positionFrom(request) })
     if (artifact.kind !== 'file') {
       return error('Could not generate the wallet pass', 500, 'internal_error')
     }
@@ -45,7 +45,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
       },
     })
   } catch (cause) {
-    logger.error('wallet.apple_generation_failed', { customerId: payload.c, cause })
+    logger.error('wallet.apple_generation_failed', { customerId: payload.customerId, cause })
     return error('Could not generate the wallet pass', 500, 'internal_error')
   }
 }

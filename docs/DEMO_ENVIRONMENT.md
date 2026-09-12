@@ -16,14 +16,21 @@ Password for all of them: `DEMO_PASSWORD` from `.env.local`, default
 
 | Email | Plan | Business | Locations | Customers | Demonstrates |
 | --- | --- | --- | --- | --- | --- |
-| `starter@demo.com` | Starter | Madrid Coffee | 1 | ~140 | The $5 tier: wallet cards and location-aware passes, **no** geofencing or campaigns — so the upgrade wall is visible in situ. |
-| `growth@demo.com` | Growth | Barcelona Barber | 3 | ~420 | Multi-location, geofencing, proximity campaigns, the rule builder, segments. |
-| `pro@demo.com` | Pro | Valencia Fitness | 3 | ~860 | AI, advanced analytics, memberships, API access — and dwell triggers, which a gym actually uses. |
-| `business@demo.com` | Business | Sevilla Bakery | 4 | ~1,240 | Unlimited everything, the partner network, team management, split-shift opening hours. |
-| `admin@demo.com` | — | *(platform staff)* | — | — | `/admin`: every business, MRR, plan changes, impersonation. |
+| `starter@demo.com` | Starter $29 | Madrid Coffee | 1 | ~140 | The complete core product on the entry tier: wallet cards, the card designer, campaigns, automations, segments and AI. **No** geofencing, gift cards or multi-location, so the upgrade wall is visible in situ. |
+| `growth@demo.com` | Growth $59 | Barcelona Barber | 3 | ~420 | Multi-location, merchant-set geofencing, proximity campaigns, the rule builder, gift cards, advanced analytics. Also the plan the trial runs on. |
+| `pro@demo.com` | Pro $99 | Sevilla Bakery | 4 | ~1,240 | Four shops, paid memberships (2 plans, 74 members), the partner network, the largest dataset in the demo. |
+| `trial@demo.com` | Trial → Growth | Bilbao Pizzeria | 1 | ~45 | The state every real merchant is in on day one: the countdown banner, and Growth's features without a card. |
+| `lapsed@demo.com` | Lapsed | Zaragoza Florist | 1 | ~60 | The reactivation wall. Every read works, every write answers 402, nothing is deleted. |
+| `admin@passimo.demo` | — | *(platform staff)* | — | — | `/admin`: every business, MRR, plan changes, impersonation. |
 
 Each account is deliberately a different trade, so a reviewer sees the product working
-for a café, a barber, a gym and a bakery rather than four copies of the same café.
+for a café, a barber, a bakery chain, a pizzeria and a florist rather than five copies
+of the same café.
+
+Every workspace sits **inside** its own caps. That is deliberate: a demo account
+already over its limit teaches a reviewer that the limits do not hold. `lapsed` is
+the exception, and there the "60 / 0" reading is the state working correctly —
+zero is what refuses a *write*.
 
 Change the admin list with `PLATFORM_ADMIN_EMAILS` (comma-separated).
 
@@ -55,6 +62,19 @@ Per business:
   to reality, and the reason "no pass installed" is a normal skip reason rather than an
   error.
 - **Team notifications** for the notification bell.
+- **RFM segments, churn risk and predicted lifetime value**, computed at the end of
+  each business with `passimo_recompute_rfm` and `passimo_recompute_churn_risk` — the
+  same functions the daily job runs.
+
+  These are worth calling out because the seed did *not* run them until 2026-09-05, and
+  the demo looked broken rather than empty as a result: the built-in "High churn risk"
+  segment read 0 on every account, the "VIP" segment lost half its definition
+  (*is_vip OR RFM in champion/loyal*), every customer profile showed "—" for churn and
+  predicted value, and sorting the customer list by churn did nothing. Running the real
+  functions rather than writing plausible numbers is what keeps the seed honest.
+
+  GDPR-erased customers are deliberately skipped — an anonymised person must not carry a
+  behavioural profile — so a handful of rows per business have no RFM by design.
 
 ---
 
@@ -88,10 +108,11 @@ it calls `passimo_provision_business`, so if provisioning
 breaks, seeding breaks. That is a much better place to find out than a customer's first
 signup.
 
-Run with Node's built-in type stripping — no `tsx`, no `ts-node`, no extra dependency:
+Run through `tsx` with the `react-server` condition, which is what lets the script
+import the same `server-only` modules the application uses:
 
 ```json
-"seed:demo": "node --experimental-strip-types --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/seed-demo.ts"
+"seed:demo": "tsx --conditions=react-server --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/seed-demo.ts"
 ```
 
 ---
@@ -115,11 +136,12 @@ Then:
 | --- | --- | --- |
 | `/` | — | The landing page, live demo and pricing |
 | `/dashboard` | `growth@demo.com` | Customers, campaigns, analytics with real data |
-| `/dashboard/locations` | `business@demo.com` | Four stores with geofences and split-shift hours |
+| `/dashboard/locations` | `pro@demo.com` | Four stores with geofences and split-shift hours |
 | `/dashboard/wallet/design` | `growth@demo.com` | The card designer — templates, colours, layout, Apple and Google previews |
+| `/dashboard/customers` | `pro@demo.com` | 1,240 customers with real RFM segments, churn scores and predicted value |
 | `/dashboard/wallet` | `growth@demo.com` | Brand kit, notifications, campaigns, rules, analytics, templates |
 | `/pos` | any merchant | The counter scanner |
-| `/admin` | `admin@demo.com` | Every business, MRR, impersonation |
+| `/admin` | `admin@passimo.demo` | Every business, MRR, impersonation |
 
 ---
 

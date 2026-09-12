@@ -17,12 +17,19 @@ import type { Locale } from '@/lib/i18n/locales'
  * Every claim below is traceable:
  *
  *   * per-channel consent with timestamp and source → `customers.consents`
+ *   * tenant isolation → `requireBusinessAccess` in `lib/auth/context.ts`, an
+ *     explicit `business_id` filter on every query, and
+ *     `tests/unit/tenant-isolation.test.ts`. Deliberately *not* row-level
+ *     security: migration 000018 removed policies that were inert here
+ *     (a table owner bypasses its own policies unless forced), and the
+ *     policy text used to promise them. See `docs/SECURITY.md`.
  *   * coarsened, replaced position → `lib/wallet/geo.ts` `coarsen()`,
  *     `customer_device_positions` (primary key on `customer_id`)
  *   * no movement history → the row is upserted, never appended
  *   * erasure → `lib/gdpr/requests.ts`
  *   * signed capability links → `lib/crypto.ts`
- *   * no customer data in the service-worker cache → `public/sw.js`
+ *   * what the counter device caches, and the roster exception →
+ *     `public/sw.js`, `lib/client/offline-queue.ts`
  *
  * Not a substitute for review by a lawyer in the operator's jurisdiction. The
  * `disclaimer` field says so on the page, rather than leaving a reader to assume
@@ -53,7 +60,15 @@ export type LegalContent = {
 }
 
 /** The date the wording last changed. Bump it when the text does. */
-const LAST_UPDATED = '2026-07-31'
+/**
+ * The date the legal text last changed, and the version a signup records as
+ * accepted (`businesses.terms_version`). Exported so the acceptance stored at
+ * signup names the text that was actually on screen: if this string moves and
+ * a row still holds the old one, that account accepted something else.
+ */
+export const LEGAL_VERSION = '2026-07-31'
+
+const LAST_UPDATED = LEGAL_VERSION
 
 const CONTENT: Record<Locale, Record<LegalDocument, LegalContent>> = {
   en: {
@@ -108,10 +123,27 @@ const CONTENT: Record<Locale, Record<LegalDocument, LegalContent>> = {
           body: ['These are architectural, not policy promises.'],
           bullets: [
             'We do not sell personal data, and we do not share it with advertisers.',
-            'One shop can never see another shop’s customers. Every table is scoped by row-level security in the database, in addition to the checks in the application.',
+            'One shop can never see another shop’s customers. Every request is checked against the requester’s membership of that shop before it runs, every query names the shop it is for, and the test suite asserts that a request for another shop’s data is refused.',
             'We do not build a movement history from location readings.',
-            'We do not store customer data in your browser’s offline cache. Staff devices are often shared, and a stale balance quoted to a customer’s face is worse than an honest "you are offline".',
             'We do not track you across other websites.',
+          ],
+        },
+        {
+          /*
+           * This section replaces a bullet under "What we never do" that read
+           * "We do not store customer data in your browser's offline cache."
+           * That was false, and falsely *architectural*, which is worse: the
+           * counter's IndexedDB store in `lib/client/offline-queue.ts` caches
+           * identified customers — name, email, phone, spend — for 24 hours,
+           * because a scan can only be served offline if the device already
+           * knows who the code belongs to. The cache is the feature working.
+           * Describing what it holds is the honest version.
+           */
+          heading: 'What a shop’s own till remembers',
+          body: [
+            'The point-of-sale screen has to keep working when the shop’s internet does not, and that requires the device to remember things. On the phone, tablet or laptop a shop serves customers from, the browser stores three things: visits scanned while offline that have not yet reached us; the details of customers already identified on that device — name, contact details, balance and recent spend — for up to twenty-four hours; and the shop’s fallback list of recent and regular customers, so a name can still be tapped when the camera or the connection fails. Nothing else from a signed-in session is cached.',
+            'This is on the shop’s device, not ours, and it is what lets a customer still get their stamp during an outage. It is cleared when the browser’s site data is cleared, and it is one more reason a till device should be locked like the till it is.',
+            'Nothing equivalent happens on a customer’s own phone. The card page reads from the server each time.',
           ],
         },
         {
@@ -125,6 +157,25 @@ const CONTENT: Record<Locale, Record<LegalDocument, LegalContent>> = {
           heading: 'How long things are kept',
           body: [
             'Loyalty history is kept while your membership is active, because it is what your balance is made of. A coarse position is kept only until it is replaced by the next reading. Audit records of administrative actions are kept for accountability. Anything erased on request is gone at the point of erasure.',
+          ],
+        },
+        {
+          /*
+           * Written from `lib/ai/capabilities.ts`, and pinned to it by
+           * `tests/unit/ai-data-flow.test.ts` — a change to the columns those
+           * capabilities select fails that test, so this section cannot
+           * silently stop being true. Naming a provider in the processor list
+           * without saying what reaches it is the omission this section exists
+           * to close.
+           */
+          heading: 'The AI features, and what they send',
+          body: [
+            'A shop can ask Passimo to write a campaign, suggest what to do this week, turn a sentence into a customer segment, summarise one customer before a shift, group survey comments into themes, or rewrite a message. These are the only AI features, and they run only if the operator has configured an **Anthropic** API key. Without one they are unavailable and say so — nothing is generated locally and nothing is faked.',
+            'Five of those seven features send **aggregates only**: counts of customers, repeat and churn rates, revenue totals and averages, and the names a shop chose for its own segments, campaigns and rewards. No customer record, email address, phone number or identifier is included.',
+            'Two of them send more than that, and it is worth being exact about which.',
+            '**The customer summary** is requested by a staff member for one named customer. It sends that customer’s first name, their visit and spend figures, up to twenty-five recent activity rows, and up to five staff notes. It does not send their full name, their email address, their phone number, their date of birth, their address or their database identifier.',
+            '**Grouping survey comments into themes** sends up to a hundred and fifty comments as customers actually wrote them, together with the score each person gave. Free text cannot be grouped into themes without being read, so there is no aggregate version of this feature. Nothing is attached to those comments — no name, no email, no identifier — but a comment is whatever the person typed, and if someone signs their own message that text goes too.',
+            'AI output is never applied to a shop’s data on its own. A generated campaign arrives as an editable draft; a suggestion arrives as a suggestion. Nothing is created, sent or changed without someone at the shop choosing it.',
           ],
         },
         {
@@ -297,10 +348,17 @@ const CONTENT: Record<Locale, Record<LegalDocument, LegalContent>> = {
           body: ['Esto es arquitectura, no promesas.'],
           bullets: [
             'No vendemos datos personales ni los compartimos con anunciantes.',
-            'Una tienda nunca puede ver los clientes de otra. Cada tabla está aislada por seguridad a nivel de fila en la base de datos, además de las comprobaciones de la aplicación.',
+            'Una tienda nunca puede ver los clientes de otra. Cada petición se comprueba contra la pertenencia de quien la hace a esa tienda antes de ejecutarse, cada consulta nombra la tienda a la que corresponde, y las pruebas automáticas verifican que se rechaza una petición de datos de otra tienda.',
             'No construimos un historial de movimientos con las lecturas de ubicación.',
-            'No guardamos datos de clientes en la caché offline de tu navegador. Los dispositivos del mostrador se comparten, y decirle a un cliente un saldo desactualizado a la cara es peor que un honesto «no hay conexión».',
             'No te seguimos por otras webs.',
+          ],
+        },
+        {
+          heading: 'Qué recuerda la caja de la tienda',
+          body: [
+            'La pantalla de cobro tiene que seguir funcionando cuando se cae internet en la tienda, y para eso el dispositivo necesita recordar cosas. En el móvil, la tablet o el ordenador desde el que la tienda atiende, el navegador guarda tres cosas: las visitas escaneadas sin conexión que aún no nos han llegado; los datos de los clientes ya identificados en ese dispositivo —nombre, datos de contacto, saldo y gasto reciente— durante un máximo de veinticuatro horas; y la lista de apoyo de clientes recientes y habituales de la tienda, para poder tocar un nombre cuando falla la cámara o la conexión. No se guarda nada más de una sesión iniciada.',
+            'Esto está en el dispositivo de la tienda, no en el nuestro, y es lo que permite que un cliente reciba su sello durante una caída. Se borra al borrar los datos del sitio en el navegador, y es una razón más para bloquear ese dispositivo como se bloquea una caja.',
+            'En el móvil del cliente no pasa nada parecido: la página de su tarjeta se lee del servidor cada vez.',
           ],
         },
         {
@@ -314,6 +372,17 @@ const CONTENT: Record<Locale, Record<LegalDocument, LegalContent>> = {
           heading: 'Cuánto tiempo se guarda',
           body: [
             'El historial de fidelización se guarda mientras tu alta esté activa, porque es de lo que está hecho tu saldo. Una posición aproximada se guarda solo hasta que la sustituye la siguiente lectura. Los registros de auditoría de acciones administrativas se conservan por responsabilidad. Lo que se borra a petición desaparece en ese momento.',
+          ],
+        },
+        {
+          heading: 'Las funciones de IA y qué envían',
+          body: [
+            'Una tienda puede pedirle a Passimo que le escriba una campaña, le sugiera qué hacer esta semana, convierta una frase en un segmento de clientes, le resuma un cliente antes del turno, agrupe los comentarios de una encuesta por temas o reescriba un mensaje. Esas son todas las funciones de IA, y solo funcionan si quien gestiona la instalación ha configurado una clave de **Anthropic**. Sin ella no están disponibles y lo dicen: nada se genera por otro medio y nada se finge.',
+            'Cinco de esas siete funciones envían **solo datos agregados**: número de clientes, tasas de repetición y de fuga, totales y medias de ingresos, y los nombres que la tienda puso a sus propios segmentos, campañas y premios. No se incluye ninguna ficha de cliente, ni email, ni teléfono, ni identificador.',
+            'Dos de ellas envían más que eso, y merece la pena decir exactamente cuáles.',
+            '**El resumen de un cliente** lo pide una persona del equipo para un cliente concreto. Envía su nombre de pila, sus cifras de visitas y gasto, hasta veinticinco líneas de actividad reciente y hasta cinco notas del equipo. No envía su nombre completo, ni su email, ni su teléfono, ni su fecha de nacimiento, ni su dirección, ni su identificador en la base de datos.',
+            '**Agrupar los comentarios de las encuestas en temas** envía hasta ciento cincuenta comentarios tal y como los escribieron los clientes, junto con la puntuación que puso cada persona. El texto libre no se puede agrupar en temas sin leerlo, así que no existe una versión agregada de esta función. A esos comentarios no se les adjunta nada —ni nombre, ni email, ni identificador— pero un comentario es lo que la persona escribió, y si alguien firma su propio mensaje ese texto también va.',
+            'Lo que devuelve la IA nunca se aplica solo a los datos de una tienda. Una campaña generada llega como borrador editable; una sugerencia llega como sugerencia. Nada se crea, se envía ni se cambia sin que alguien de la tienda lo elija.',
           ],
         },
         {

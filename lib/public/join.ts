@@ -79,6 +79,39 @@ export function toPublicJoinData(data: JoinPageData): PublicJoinData {
 }
 
 /**
+ * The one predicate that decides whether a club is taking new members.
+ *
+ * A club is open when it has a **default program that is active**. There is no
+ * separate "accepting members" flag and none is wanted: `loyalty_programs`
+ * carries `is_active`, the merchant already toggles it, and inventing a second
+ * status to mean almost the same thing is how two sources of truth start
+ * disagreeing.
+ *
+ * This lives here, next to the page read, because the page and the enrolment
+ * endpoint have to agree about it. They previously did not: `getJoinPageData`
+ * filtered on `is_active`, so a paused club rendered `program: null` and fell
+ * back to generic copy ("collect 10 stamps"), while `POST /api/v1/public/join`
+ * checked nothing at all and enrolled the person anyway. The customer row was
+ * created; no `loyalty_accounts` row was, because `passimo_enroll_customer`
+ * only provisions accounts for active programs. The result was a member of a
+ * club that was not running, holding a card with no program behind it.
+ */
+export async function getEnrollableProgram(
+  businessId: string
+): Promise<{ id: string; name: string } | null> {
+  const admin = getDb()
+  const { data } = await admin
+    .from('loyalty_programs')
+    .select('id, name')
+    .eq('business_id', businessId)
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  return data ? { id: data.id as string, name: data.name as string } : null
+}
+
+/**
  * Returns null for an unknown or archived slug.
  *
  * Null rather than a throw because the two callers need opposite things from the

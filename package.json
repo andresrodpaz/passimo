@@ -30,6 +30,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "verify:full": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:integration && pnpm seed:demo && pnpm db:verify",
     "db:verify": "node --experimental-strip-types --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/db-verify.ts",
+    "db:clean-test-data": "tsx --conditions=react-server --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/clean-test-data.ts",
     "verify:functional": "node scripts/verify-functional.mjs",
     "start:next": "next start"
   },

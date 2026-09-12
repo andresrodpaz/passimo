@@ -43,32 +43,38 @@ const PLANS: DemoPlan[] = [
     email: 'starter@demo.com',
     business: 'Madrid Coffee',
     planLabel: 'Starter',
-    locked: ['Campaigns', 'Automations', 'Gift cards', 'Memberships'],
-    unlocked: ['Customers', 'Rewards', 'Analytics'],
+    /*
+     * Campaigns and Automations moved *out* of this list in pricing v2. They are
+     * on the $29 tier now, and that is the whole commercial claim of the entry
+     * plan — a café that cannot campaign to its own list is not running a loyalty
+     * program, it is collecting one. Gift cards, memberships and the partner
+     * network are what a one-site café genuinely does not need this month.
+     */
+    locked: ['Gift cards', 'Memberships', 'Partner network'],
+    unlocked: ['Customers', 'Rewards', 'Analytics', 'Campaigns', 'Automations'],
   },
   {
     plan: 'growth',
     email: 'growth@demo.com',
     business: 'Barcelona Barber',
     planLabel: 'Growth',
-    locked: ['Memberships'],
+    locked: ['Memberships', 'Partner network'],
     unlocked: ['Campaigns', 'Automations', 'Gift cards', 'Customers'],
   },
   {
     plan: 'pro',
     email: 'pro@demo.com',
-    business: 'Valencia Fitness',
+    business: 'Sevilla Bakery',
     planLabel: 'Pro',
     locked: [],
-    unlocked: ['Campaigns', 'Automations', 'Gift cards', 'Memberships', 'Insights'],
-  },
-  {
-    plan: 'business',
-    email: 'business@demo.com',
-    business: 'Sevilla Bakery',
-    planLabel: 'Business',
-    locked: [],
-    unlocked: ['Campaigns', 'Automations', 'Gift cards', 'Memberships', 'Partner network'],
+    unlocked: [
+      'Campaigns',
+      'Automations',
+      'Gift cards',
+      'Memberships',
+      'Partner network',
+      'Insights',
+    ],
   },
 ]
 
@@ -227,8 +233,8 @@ test.describe('trial — Bilbao Pizzeria', () => {
     test.skip(!ok, 'demo account trial@demo.com is not present — run `pnpm seed:demo`')
 
     /*
-     * A trial is entitled to Pro and paying nothing. Both facts have to reach the
-     * merchant: the tier, so the features they are falling in love with have a
+     * A trial is entitled to Growth and paying nothing. Both facts have to reach
+     * the merchant: the tier, so the features they are falling in love with have a
      * name, and the countdown, so the decision has a deadline. This is also the
      * screen that proved the admin console was mislabelling trials as inactive —
      * the merchant's own dashboard was right while the operator's was not.
@@ -266,7 +272,7 @@ test.describe('lapsed — Zaragoza Florist', () => {
     // Reactivation, an entry price, or the word "inactive" — any of the three is
     // the wall doing its job. None of them is a 500 or an empty screen.
     await expect(
-      page.getByText(/reactivat|inactive|\$5|choose a plan|upgrade/i).first()
+      page.getByText(/reactivat|inactive|\$29|choose a plan|upgrade/i).first()
     ).toBeVisible()
   })
 })
@@ -295,13 +301,13 @@ test.describe('platform admin', () => {
      * two labels, not one. A row reading only "Inactive" is the defect.
      */
     const trialRow = page.getByRole('row').filter({ hasText: 'Bilbao Pizzeria' })
-    await expect(trialRow).toContainText(/pro/i)
+    await expect(trialRow).toContainText(/growth/i)
     await expect(trialRow).toContainText(/trial/i)
   })
 
   test('a merchant cannot open the admin console', async ({ page, request, baseURL }) => {
-    const ok = await signIn(page, request, baseURL, 'business@demo.com')
-    test.skip(!ok, 'demo account business@demo.com is not present — run `pnpm seed:demo`')
+    const ok = await signIn(page, request, baseURL, 'pro@demo.com')
+    test.skip(!ok, 'demo account pro@demo.com is not present — run `pnpm seed:demo`')
 
     const response = await page.goto('/admin')
     /*

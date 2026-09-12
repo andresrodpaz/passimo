@@ -23,10 +23,21 @@ export const runtime = 'nodejs'
  *     join page, the gift shop and every email.
  *   * `hero` → `wallet_card_designs.hero_image_url`, via the card design. Apple
  *     renders it as `strip.png`, Google as `heroImage`.
+ *   * `cover` → `businesses.cover_url`, via the Brand Kit. The Open Graph and
+ *     Twitter image on `/join/<slug>` — what a customer sees when the merchant
+ *     pastes their sign-up link into WhatsApp or Instagram.
  *
  * The hero image was previously **unreachable**: the column existed, both
  * providers consumed it, and nothing could set it. A merchant had to write the
- * row by hand, which is not a feature.
+ * row by hand, which is not a feature. `cover` had the same shape of problem and
+ * is fixed here for the same reason: `app/join/[businessSlug]/page.tsx` has
+ * always rendered `cover_url` into `openGraph.images` and switched the Twitter
+ * card to `summary_large_image` when it was present, and `PATCH /businesses/:id`
+ * has always accepted it — but no screen could set it, so the only merchants
+ * with a share image were the ones who could call the API by hand. A previous
+ * audit recorded this field as "stored and editable; renders nowhere", which had
+ * the diagnosis backwards: it rendered somewhere valuable and was reachable by
+ * nobody.
  *
  * The product rule this exists to satisfy is blunt: *a merchant must be able to
  * put their own logo on their customers' loyalty card without a developer.*
@@ -56,7 +67,7 @@ export const runtime = 'nodejs'
  */
 const uploadQuerySchema = businessIdSchema.extend({
   /** Which image this is. Defaults to `logo` so existing callers are unaffected. */
-  kind: z.enum(['logo', 'hero']).optional(),
+  kind: z.enum(['logo', 'hero', 'cover']).optional(),
 })
 
 export const POST = defineRoute(
@@ -106,7 +117,9 @@ export const POST = defineRoute(
     const key =
       kind === 'hero'
         ? storageKeys.businessHero(business.businessId, fingerprint, check.format.extension)
-        : storageKeys.businessLogo(business.businessId, fingerprint, check.format.extension)
+        : kind === 'cover'
+          ? storageKeys.businessCover(business.businessId, fingerprint, check.format.extension)
+          : storageKeys.businessLogo(business.businessId, fingerprint, check.format.extension)
 
     await driver.put({
       key,
@@ -126,23 +139,40 @@ export const POST = defineRoute(
      * putting the strip image there because the upload happened to share a route
      * would be the same conflation migration 21 removed.
      */
-    const brand = kind === 'logo' ? await updateBrandKit(business.businessId, { logoUrl: url }) : null
+    const brand =
+      kind === 'logo'
+        ? await updateBrandKit(business.businessId, { logoUrl: url })
+        : kind === 'cover'
+          ? await updateBrandKit(business.businessId, { coverUrl: url })
+          : null
     const design =
       kind === 'hero' ? await updateCardDesign(business.businessId, { heroImageUrl: url }) : null
 
     await recordAudit({
       businessId: business.businessId,
       actor,
-      action: kind === 'hero' ? 'brand.hero_uploaded' : 'brand.logo_uploaded',
+      action:
+        kind === 'hero'
+          ? 'brand.hero_uploaded'
+          : kind === 'cover'
+            ? 'brand.cover_uploaded'
+            : 'brand.logo_uploaded',
       resourceType: 'business',
       resourceId: business.businessId,
       summary: `Uploaded ${kind} (${check.format.mime}, ${bytes.byteLength} bytes)`,
       request,
     })
 
-    // Every installed card carries this image. A merchant who changes their logo
-    // and sees the old one on their own phone concludes the product is broken.
-    await scheduleBusinessWalletSync(business.businessId, 'settings_changed')
+    /*
+     * Every installed card carries the logo and the hero, so replacing either has
+     * to push to the passes already on customers' phones — a merchant who changes
+     * their logo and sees the old one concludes the product is broken. The cover
+     * is not on the card at all; it is a link-preview image, so re-signing every
+     * pass for it would be work with no observable effect.
+     */
+    if (kind !== 'cover') {
+      await scheduleBusinessWalletSync(business.businessId, 'settings_changed')
+    }
 
     // `logoUrl` is kept in the response for the existing Brand panel caller.
     return { url, logoUrl: kind === 'logo' ? url : null, kind, brand, design }

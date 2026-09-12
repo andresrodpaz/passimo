@@ -126,6 +126,7 @@ async function signUpMerchant(request: APIRequestContext): Promise<Merchant | nu
       category: 'cafe',
       timezone: 'Europe/Madrid',
       locale: 'en',
+      acceptedTerms: true,
     },
   })
 
@@ -198,7 +199,29 @@ test.describe('the whole flow, end to end', () => {
     // paying: a card form between a merchant and their first customer is the
     // single most expensive screen a loyalty product can have.
     await expect(page.getByRole('heading', { name: /pick a plan/i })).toBeVisible()
-    await page.getByRole('button', { name: /start my 14-day trial/i }).click()
+
+    /*
+     * The three published prices, on the screen where the merchant chooses.
+     * Rendered from `lib/billing/plans.ts`, so this failing means either the
+     * catalogue moved or this screen stopped reading it — and the second is how
+     * onboarding comes to offer a price checkout will not honour.
+     */
+    const planStep = await page.locator('main').innerText()
+    for (const price of ['$29', '$59', '$99']) {
+      expect(planStep, `the plan step must quote ${price}`).toContain(price)
+    }
+    // One recommendation, made from the trade they picked on the previous screen.
+    await expect(page.getByText(/recommended for you/i).first()).toBeVisible()
+    // And the decision must be cheap to make, which is what this line says.
+    await expect(page.getByText(/change or cancel your plan at any time/i)).toBeVisible()
+
+    /*
+     * "Keep going on my trial", not "Start my 14-day trial". The trial began at
+     * signup, so a button offering to start it was describing something that had
+     * already happened — and a merchant who reads it as "this is where the trial
+     * begins" concludes they have not started one if they skip the step.
+     */
+    await page.getByRole('button', { name: /keep going on my trial/i }).click()
 
     // --- Step 3: the first location -------------------------------------------
     //

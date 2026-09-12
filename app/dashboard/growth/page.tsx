@@ -17,6 +17,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
+import { JoinQr } from '@/components/join/join-qr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -643,11 +644,11 @@ function ShareAssets({ assets }: { assets: GrowthResponse['assets'] }) {
         <h3 className="text-base font-semibold">{t('growth.counterQr')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{t('growth.counterQrBody')}</p>
         <div className="mt-4 flex flex-wrap items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/v1/public/qr?data=${encodeURIComponent(assets.join_url)}&size=200`}
+          <JoinQr
+            joinUrl={assets.join_url}
+            size={128}
+            renderSize={512}
             alt={t('growth.qrAlt')}
-            className="size-32 rounded-lg border bg-white p-2"
           />
           <Button asChild variant="outline" className="gap-2">
             <a href={assets.qr_url} download>

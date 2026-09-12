@@ -1,4 +1,4 @@
-import { verifyToken } from '@/lib/crypto'
+import { verifyCardToken } from '@/lib/loyalty/card-token'
 import { env } from '@/lib/env'
 import { error } from '@/lib/http'
 import { logger } from '@/lib/logger'
@@ -24,8 +24,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params
 
-  const payload = verifyToken<{ c: string }>('card', token)
-  if (!payload?.c) return error('This wallet link is invalid or has expired', 403, 'forbidden')
+  const payload = await verifyCardToken(token)
+  if (!payload) return error('This wallet link is invalid or has expired', 403, 'forbidden')
 
   const service = walletService()
   const issuerId = env.google.issuerId
@@ -37,16 +37,16 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     // A customer saving from the card page has usually just granted location, so
     // the nearest store is ordered first — which matters because Google caps the
     // number of locations it accepts on one object.
-    const artifact = await service.issue('google', payload.c, { near: positionFrom(request) })
+    const artifact = await service.issue('google', payload.customerId, { near: positionFrom(request) })
     if (artifact.kind !== 'redirect') {
       return error('Could not generate the Google Wallet pass', 500, 'internal_error')
     }
 
-    await markGoogleWalletSaved(payload.c, googleObjectId(payload.c, issuerId))
+    await markGoogleWalletSaved(payload.customerId, googleObjectId(payload.customerId, issuerId))
 
     return Response.redirect(artifact.url, 302)
   } catch (cause) {
-    logger.error('wallet.google_save_failed', { customerId: payload.c, cause })
+    logger.error('wallet.google_save_failed', { customerId: payload.customerId, cause })
     return error('Could not generate the Google Wallet pass', 500, 'internal_error')
   }
 }

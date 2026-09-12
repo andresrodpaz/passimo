@@ -20,7 +20,19 @@ describe('referral conversion', () => {
   it('counts a merchant paying for a purchasable tier', () => {
     expect(isReferralConverted('starter', 'active')).toBe(true)
     expect(isReferralConverted('growth', 'active')).toBe(true)
+    expect(isReferralConverted('pro', 'active')).toBe(true)
+  })
+
+  it('counts a paying merchant whose row still holds a legacy tier name', () => {
+    /*
+     * `business` and `enterprise` were real $99 subscriptions under earlier
+     * catalogues. Judging them on the spelling rather than on what they resolve
+     * to would have quietly cancelled their referrer's credit the moment we
+     * renamed the tier — the referrer sees a converted merchant become
+     * unconverted, with no explanation and no way to appeal it.
+     */
     expect(isReferralConverted('business', 'active')).toBe(true)
+    expect(isReferralConverted('enterprise', 'active')).toBe(true)
   })
 
   it('does not count a lapsed merchant, who by definition never paid', () => {
@@ -44,11 +56,15 @@ describe('referral conversion', () => {
     }
   })
 
-  it('rejects the legacy and unknown plan values outright', () => {
-    // `trial` and `free` are pre-migration-15 stored values, not tiers anyone can
-    // buy. They must never convert regardless of what the status column says.
-    for (const legacy of ['trial', 'free', 'enterprise', '', null, undefined, 7]) {
-      expect(isReferralConverted(legacy, 'active'), `plan ${String(legacy)}`).toBe(false)
+  it('rejects the non-paying and unknown plan values outright', () => {
+    /*
+     * `trial` is a lifecycle state and `free` resolves to `lapsed`; neither is a
+     * tier anyone can buy, so neither converts regardless of what the status
+     * column says. Anything unrecognisable is treated the same way — a garbage
+     * value must never be worth $50 of credit.
+     */
+    for (const value of ['trial', 'free', 'platinum', '', null, undefined, 7]) {
+      expect(isReferralConverted(value, 'active'), `plan ${String(value)}`).toBe(false)
     }
   })
 

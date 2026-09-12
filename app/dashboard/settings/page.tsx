@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import Image from 'next/image'
+import { JoinQr } from '@/components/join/join-qr'
 import Link from 'next/link'
 import {
   Loader2,
@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useApi, apiPatch, query } from '@/lib/client/api'
+import { useApi, apiPatch, apiPost, apiDelete, query, ApiError } from '@/lib/client/api'
 import { useWorkspace } from '@/lib/client/workspace'
 import { AsyncBoundary } from '@/components/states'
 import { useClientValue } from '@/lib/client/hooks'
@@ -69,6 +69,8 @@ type SettingsResponse = {
     invited_email: string | null
     last_active_at: string | null
   }>
+  /* Absent on older responses; the panel falls back to counting the roster. */
+  seats?: { used: number; allowed: number | null }
   role: string
   capabilities: Record<string, boolean>
 }
@@ -140,7 +142,7 @@ export default function SettingsPage() {
             </TabsContent>
 
             <TabsContent value="team" className="mt-5">
-              <TeamPanel settings={settings} />
+              <TeamPanel settings={settings} businessId={businessId} onChanged={mutate} />
             </TabsContent>
           </Tabs>
         )}
@@ -611,16 +613,7 @@ function SignupPanel({ slug, name }: { slug: string; name: string }) {
       <p className="mt-1 text-sm text-muted-foreground">{t('settings.signupLinkBody')}</p>
 
       <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-        {origin && (
-          <Image
-            src={`/api/v1/public/qr?data=${encodeURIComponent(joinUrl)}`}
-            alt={t('settings.qrAlt', { name })}
-            width={180}
-            height={180}
-            unoptimized
-            className="rounded-lg border bg-white p-2"
-          />
-        )}
+        {origin && <JoinQr joinUrl={joinUrl} size={180} alt={t('settings.qrAlt', { name })} />}
 
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex gap-2">
@@ -663,23 +656,104 @@ function SignupPanel({ slug, name }: { slug: string; name: string }) {
   )
 }
 
-function TeamPanel({ settings }: { settings: SettingsResponse }) {
+function TeamPanel({
+  settings,
+  businessId,
+  onChanged,
+}: {
+  settings: SettingsResponse
+  businessId: string | null
+  onChanged: () => void
+}) {
   const { t, formatDate } = useI18n()
+  const [email, setEmail] = React.useState('')
+  const [role, setRole] = React.useState('staff')
+  const [busy, setBusy] = React.useState(false)
+  const [notice, setNotice] = React.useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  /*
+   * Only the owner and an admin hold `team:manage`, and the endpoint enforces
+   * that regardless. Hiding the form from everyone else keeps a manager from
+   * filling it in to be refused — the roster itself stays visible, because
+   * knowing who you work with is not an administrative privilege.
+   */
+  const canManage = settings.role === 'owner' || settings.role === 'admin'
+  const seatsAllowed = settings.seats?.allowed ?? null
+  const seatsUsed = settings.seats?.used ?? settings.team.length
+  const seatsFull = seatsAllowed !== null && seatsUsed >= seatsAllowed
+
+  async function invite(event: React.FormEvent) {
+    event.preventDefault()
+    if (!businessId) return
+    if (!email.trim()) {
+      setNotice({ kind: 'error', text: t('team.needsEmail') })
+      return
+    }
+
+    setBusy(true)
+    setNotice(null)
+    try {
+      const result = await apiPost<{ email_sent: boolean; invite_url: string | null }>(
+        '/api/v1/team',
+        { businessId, email: email.trim(), role }
+      )
+      setNotice({
+        kind: 'ok',
+        /* An unconfigured email provider is not a failure of the invitation —
+           the row exists. The merchant gets the link to pass on themselves. */
+        text: result.email_sent
+          ? t('team.sent', { email: email.trim() })
+          : t('team.sentNoEmail', { url: result.invite_url ?? '' }),
+      })
+      setEmail('')
+      onChanged()
+    } catch (cause) {
+      setNotice({
+        kind: 'error',
+        text: cause instanceof ApiError ? cause.message : t('team.failed'),
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(memberId: string, name: string) {
+    if (!businessId) return
+    if (!window.confirm(t('team.removeConfirm', { name }))) return
+    try {
+      await apiDelete('/api/v1/team', { businessId, memberId })
+      onChanged()
+    } catch (cause) {
+      setNotice({
+        kind: 'error',
+        text: cause instanceof ApiError ? cause.message : t('team.failed'),
+      })
+    }
+  }
 
   return (
     <section className="rounded-xl border bg-card p-5">
-      <h3 className="text-base font-semibold">{t('settings.team')}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{t('settings.teamBody')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold">{t('settings.team')}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t('settings.teamBody')}</p>
+        </div>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {seatsAllowed === null
+            ? t('team.seatsUnlimited', { used: String(seatsUsed) })
+            : t('team.seatsUsed', { used: String(seatsUsed), allowed: String(seatsAllowed) })}
+        </span>
+      </div>
+
       <ul className="mt-4 divide-y">
         {settings.team.map((member) => {
           const roleKey = `settings.roles.${member.role}` as TranslationKey
           const roleLabel = t(roleKey)
+          const name = member.display_name ?? member.invited_email ?? t('settings.teamMember')
           return (
-            <li key={member.id} className="flex items-center justify-between py-3">
+            <li key={member.id} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {member.display_name ?? member.invited_email ?? t('settings.teamMember')}
-                </p>
+                <p className="truncate text-sm font-medium">{name}</p>
                 <p className="text-xs text-muted-foreground">
                   {member.status === 'invited'
                     ? t('settings.invitationPending')
@@ -688,13 +762,83 @@ function TeamPanel({ settings }: { settings: SettingsResponse }) {
                       : t('settings.neverSignedIn')}
                 </p>
               </div>
-              <Badge variant={member.role === 'owner' ? 'default' : 'outline'}>
-                {roleLabel === roleKey ? member.role : roleLabel}
-              </Badge>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge variant={member.role === 'owner' ? 'default' : 'outline'}>
+                  {roleLabel === roleKey ? member.role : roleLabel}
+                </Badge>
+                {canManage && member.role !== 'owner' && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => void remove(member.id, name)}
+                  >
+                    {member.status === 'invited' ? t('team.revoke') : t('team.remove')}
+                  </Button>
+                )}
+              </div>
             </li>
           )
         })}
       </ul>
+
+      {canManage && (
+        <form onSubmit={invite} className="mt-4 space-y-3 border-t pt-4">
+          <p className="text-sm font-medium">{t('team.invite')}</p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex-1">
+              <Label htmlFor="invite-email" className="sr-only">
+                {t('team.emailLabel')}
+              </Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder={t('team.emailPlaceholder')}
+                disabled={busy || seatsFull}
+                autoComplete="off"
+              />
+            </div>
+            <div className="sm:w-40">
+              <Label htmlFor="invite-role" className="sr-only">
+                {t('team.roleLabel')}
+              </Label>
+              <select
+                id="invite-role"
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                disabled={busy || seatsFull}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-50"
+              >
+                {['admin', 'manager', 'staff', 'viewer'].map((value) => {
+                  const key = `settings.roles.${value}` as TranslationKey
+                  const label = t(key)
+                  return (
+                    <option key={value} value={value}>
+                      {label === key ? value : label}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+            <Button type="submit" disabled={busy || seatsFull} className="sm:w-auto">
+              {busy ? t('team.sending') : t('team.send')}
+            </Button>
+          </div>
+
+          {seatsFull && <p className="text-xs text-amber-600">{t('team.seatsFull')}</p>}
+          {notice && (
+            <p
+              className={`text-xs ${notice.kind === 'ok' ? 'text-emerald-600' : 'text-destructive'}`}
+              role="status"
+            >
+              {notice.text}
+            </p>
+          )}
+        </form>
+      )}
     </section>
   )
 }

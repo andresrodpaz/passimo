@@ -10,6 +10,10 @@
 -- deploy. So these queries assert the *column* against what the catalogue says,
 -- and the catalogue values are inlined below. If they ever diverge, the inline
 -- copy is the thing that is wrong.
+--
+-- Mirrors pricing v2: three purchasable tiers at $29 / $59 / $99, plus the two
+-- lifecycle states. `business` is gone — migration 000024 folded it into `pro`,
+-- which sits at the same $99 it used to.
 -- =============================================================================
 
 \pset pager off
@@ -17,22 +21,24 @@
 \echo
 \echo '=== The catalogue, as the application defines it =============================='
 -- Mirrored from lib/billing/plans.ts. There is no free tier and the entry price
--- is $5; a row here with a price under 5 (other than the internal `lapsed`
+-- is $29; a row here with a price under 29 (other than the internal `lapsed`
 -- state, which is not for sale) is a contradiction.
 
 with catalogue(plan, monthly_usd, annual_usd, customers, locations, team_members, purchasable) as (
   values
-    ('lapsed',   null::int, null::int, 0,    1,    1,    false),
-    ('starter',  5,         50,        500,  1,    2,    true),
-    ('growth',   19,        190,       5000, 5,    10,   true),
-    ('pro',      49,        490,       25000,15,   25,   true),
-    ('business', 99,        990,       null, null, null, true)
+    ('lapsed',   null::int, null::int, 0,     1,   1,    false),
+    ('starter',  29,        290,       500,   1,   3,    true),
+    ('growth',   59,        590,       5000,  3,   10,   true),
+    ('pro',      99,        990,       20000, 10,  25,   true)
 )
 select
   case
     when not purchasable then 'PASS'
     when monthly_usd is null then 'FAIL'
-    when monthly_usd < 5 then 'FAIL'
+    when monthly_usd < 29 then 'FAIL'
+    -- Ten months for a year, on every tier. A different ratio on one of them
+    -- would make the "two months free" badge a per-plan promotion.
+    when annual_usd <> monthly_usd * 10 then 'FAIL'
     else 'PASS'
   end as status,
   plan,
@@ -50,18 +56,18 @@ order by coalesce(monthly_usd, -1);
 \echo
 \echo '=== Stored plan values the application recognises ============================='
 -- `businesses.plan` may hold `trial` (a lifecycle state, not a tier) plus the
--- four purchasable tiers and `lapsed`. Anything else is gated as lapsed by
+-- three purchasable tiers and `lapsed`. Anything else is gated as lapsed by
 -- `resolveEntitlements`, which silently downgrades a paying customer.
 
 select
   case
-    when count(*) filter (where plan not in ('trial','lapsed','starter','growth','pro','business')) = 0
+    when count(*) filter (where plan not in ('trial','lapsed','starter','growth','pro')) = 0
       then 'PASS' else 'FAIL'
   end as status,
   count(*) as workspaces,
   coalesce(
     string_agg(distinct plan, ', ') filter (
-      where plan not in ('trial','lapsed','starter','growth','pro','business')
+      where plan not in ('trial','lapsed','starter','growth','pro')
     ),
     'none'
   ) as unrecognised_plans
@@ -69,15 +75,16 @@ from businesses;
 
 \echo
 \echo '=== No free tier in the data =================================================='
--- Migration 15 rewrote the legacy `free` and `enterprise` identifiers. A row
--- with either means that migration did not reach this database.
+-- Migration 15 rewrote `free` and `enterprise`; migration 24 rewrote `business`.
+-- A row holding any of the three means one of those migrations did not reach this
+-- database, and the application is resolving it through the code alias instead.
 
 select
   case when count(*) = 0 then 'PASS' else 'FAIL' end as status,
   count(*) as legacy_plan_rows,
   coalesce(string_agg(distinct plan, ', '), 'none') as values
 from businesses
-where plan in ('free', 'enterprise', 'basic', 'premium');
+where plan in ('free', 'enterprise', 'business', 'basic', 'premium');
 
 \echo
 \echo '=== Every workspace''s billing state ==========================================='
@@ -87,12 +94,12 @@ select
   b.plan as stored_plan,
   /*
    * What the application will actually gate on. `resolveEntitlements` treats a
-   * live trial as Pro and a `trial` row past its end date as lapsed, so the
+   * live trial as Growth and a `trial` row past its end date as lapsed, so the
    * stored value alone is not the answer — and reading it as one is what made
    * the admin console label every trial "Inactive".
    */
   case
-    when b.plan = 'trial' and b.trial_ends_at > now() then 'pro (trial)'
+    when b.plan = 'trial' and b.trial_ends_at > now() then 'growth (trial)'
     when b.plan = 'trial' then 'lapsed (trial expired)'
     else b.plan
   end as effective_plan,
@@ -121,7 +128,7 @@ from businesses b
 where
   -- Being billed for a tier with no Stripe subscription behind it. Expected on a
   -- demo or self-hosted deployment; a finding on production.
-  (b.plan in ('starter','growth','pro','business')
+  (b.plan in ('starter','growth','pro')
      and b.subscription_status = 'active'
      and b.stripe_subscription_id is null)
   -- A trial with no end date never ends.
@@ -136,7 +143,7 @@ where
 select
   b.name, b.plan, b.subscription_status,
   case
-    when b.plan in ('starter','growth','pro','business')
+    when b.plan in ('starter','growth','pro')
       and b.subscription_status = 'active'
       and b.stripe_subscription_id is null
       then 'paid tier, active status, no Stripe subscription (normal for demo/self-host)'
@@ -145,7 +152,7 @@ select
     else 'delinquent past the grace window: ' || b.subscription_current_period_end::date
   end as finding
 from businesses b
-where (b.plan in ('starter','growth','pro','business') and b.subscription_status = 'active' and b.stripe_subscription_id is null)
+where (b.plan in ('starter','growth','pro') and b.subscription_status = 'active' and b.stripe_subscription_id is null)
    or (b.plan = 'trial' and b.trial_ends_at is null)
    or (b.cancel_at_period_end and b.stripe_subscription_id is null)
    or (b.subscription_status in ('past_due','unpaid') and b.subscription_current_period_end < now() - interval '30 days')
@@ -159,12 +166,13 @@ order by b.name;
 with limits(plan, customers, locations, team_members) as (
   values
     ('lapsed',   0::int,    1::int,    1::int),
-    ('starter',  500,       1,         2),
-    ('growth',   5000,      5,         10),
-    ('pro',      25000,     15,        25),
-    ('business', null,      null,      null),
-    -- A live trial is entitled to Pro.
-    ('trial',    25000,     15,        25)
+    ('starter',  500,       1,         3),
+    ('growth',   5000,      3,         10),
+    ('pro',      20000,     10,        25),
+    -- A live trial is entitled to Growth, not to the top tier. Trials run on the
+    -- plan we most want merchants to buy, and giving them Pro made the day-15
+    -- decision a comparison of three products rather than a yes.
+    ('trial',    5000,      3,         10)
 )
 select
   case

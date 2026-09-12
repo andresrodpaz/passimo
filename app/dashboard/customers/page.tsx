@@ -9,6 +9,7 @@ import {
   UserPlus,
   Star,
   Filter,
+  Tag as TagIcon,
   Users,
   Gift,
 } from 'lucide-react'
@@ -58,6 +59,7 @@ export default function CustomersPage() {
   const [term, setTerm] = React.useState('')
   const [debounced, setDebounced] = React.useState('')
   const [segmentId, setSegmentId] = React.useState<string>('')
+  const [tag, setTag] = React.useState<string>('')
   const [sort, setSort] = React.useState<'recent' | 'spend' | 'visits' | 'churn' | 'name'>('recent')
   const [page, setPage] = React.useState(0)
 
@@ -73,11 +75,23 @@ export default function CustomersPage() {
     businessId ? `/api/v1/segments${query({ businessId })}` : null
   )
 
+  /*
+   * The business's tag vocabulary, for the filter below.
+   *
+   * `?tag=` has been a supported query parameter on this endpoint all along and
+   * nothing in the UI could set it — so a merchant could tag customers by CSV
+   * import and then had no way to find them again.
+   */
+  const { data: tagData } = useApi<{ tags: string[] }>(
+    businessId ? `/api/v1/customers/tags${query({ businessId })}` : null
+  )
+
   const listKey = businessId
     ? `/api/v1/customers${query({
         businessId,
         q: debounced,
         segmentId: segmentId || undefined,
+        tag: tag || undefined,
         sort,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
@@ -165,6 +179,34 @@ export default function CustomersPage() {
           </SelectContent>
         </Select>
 
+        {/* Only offered once the business actually uses tags: an empty filter is
+            a control that teaches a merchant the feature does nothing. */}
+        {(tagData?.tags?.length ?? 0) > 0 && (
+          <Select
+            value={tag || 'all'}
+            onValueChange={(value) => {
+              setTag(value === 'all' ? '' : value)
+              setPage(0)
+            }}
+          >
+            <SelectTrigger
+              className="h-10 w-full sm:w-[180px]"
+              aria-label={t('customers.tags.filterLabel')}
+            >
+              <TagIcon className="mr-1 size-3.5" />
+              <SelectValue placeholder={t('customers.tags.allTags')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('customers.tags.allTags')}</SelectItem>
+              {(tagData?.tags ?? []).map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}>
           <SelectTrigger className="h-10 w-full sm:w-[170px]">
             <SelectValue />
@@ -187,7 +229,7 @@ export default function CustomersPage() {
         loading={<LoadingRows rows={8} />}
         isEmpty={(value) => value.customers.length === 0}
         empty={
-          debounced || segmentId ? (
+          debounced || segmentId || tag ? (
             <EmptyState
               icon={Search}
               title={t('customers.noMatches')}

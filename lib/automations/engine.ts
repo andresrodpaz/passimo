@@ -1,5 +1,5 @@
 import 'server-only'
-import { getDb } from '@/lib/db'
+import { getDb, idsFrom } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { enqueue } from '@/lib/jobs/queue'
 import { dispatchMessage } from '@/lib/messaging/dispatch'
@@ -388,7 +388,17 @@ async function findEligibleCustomers(
       p_month: target.getUTCMonth() + 1,
       p_day: target.getUTCDate(),
     })
-    return (data ?? []).map((row: { id: string }) => row.id)
+    /*
+      * `idsFrom`, not `.map((row) => row.id)`.
+      *
+      * `passimo_customers_with_date_today` is a single-column `returns table`,
+      * which PostgreSQL flattens to `setof uuid` — so this arrives as bare
+      * strings and reading `.id` off them gave an array of `undefined`. The
+      * birthday and anniversary automations therefore found nobody, every day,
+      * without logging anything: an empty audience is a legitimate answer on
+      * most days of the year, so there was nothing to notice.
+      */
+     return idsFrom(data)
   }
 
   if (trigger === 'inactivity') {

@@ -72,6 +72,22 @@ export const HERO_COPY: ImageFieldCopy = {
   shape: 'wide',
 }
 
+/**
+ * The social share image, on the Brand screen.
+ *
+ * Wide and `cover` like the hero because a link preview is a 1.91:1 crop, not a
+ * square — previewing it square would show the merchant something no unfurler
+ * will ever render.
+ */
+export const COVER_COPY: ImageFieldCopy = {
+  label: 'brandKit.cover',
+  upload: 'brandKit.coverUpload',
+  replace: 'brandKit.coverReplace',
+  hint: 'brandKit.coverHint',
+  fit: 'cover',
+  shape: 'wide',
+}
+
 export type LogoFieldProps = {
   value: string | null
   /** False when this deployment cannot store files; shows the URL fallback. */

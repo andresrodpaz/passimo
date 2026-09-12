@@ -76,7 +76,30 @@ class ParamBag {
     const index = this.values.length
     this.values.push(value)
     if (cast === 'text[]') {
-      return `(select coalesce(array_agg(v), array[]::text[]) from jsonb_array_elements_text(${PARAMS} -> ${index}) as v)`
+      /*
+       * `array(select …)`, not `(select array_agg(…) …)`.
+       *
+       * Both produce a `text[]`, and only one of them works here. `x = any(y)`
+       * has two forms: `any(array)` and `any(subquery)`, and PostgreSQL decides
+       * *syntactically* — a parenthesised SELECT is the subquery form. So the
+       * old accessor compiled to `c.rfm_segment::text = any((select array_agg…))`,
+       * which is the subquery form applied to one row of type `text[]`, and the
+       * planner rejected it:
+       *
+       *     operator does not exist: text = text[]
+       *
+       * `array(select v from …)` is an array *constructor*, so the array form is
+       * chosen and the comparison type-checks.
+       *
+       * The reason this was invisible rather than loud: `countSegment` logs a
+       * failed query and returns 0. Every "is one of" condition therefore
+       * reported *no matching customers* instead of an error — so the built-in
+       * VIP segment ("VIP is yes **or** RFM is champion/loyal") read 0 against a
+       * workspace with 50 VIPs, and a merchant filtering by language or tag saw
+       * an empty table and concluded they had no such customers. Silent, wrong,
+       * and shaped exactly like a legitimate answer.
+       */
+      return `array(select v from jsonb_array_elements_text(${PARAMS} -> ${index}) as v)`
     }
     return `((${PARAMS} ->> ${index})::${cast})`
   }
@@ -171,12 +194,21 @@ function compileDerived(condition: SegmentCondition, bag: ParamBag): string {
   const { field, operator, value } = condition
 
   if (field === 'tag') {
-    const list = toArray(value).map(String)
+    /*
+     * Compared case-insensitively, on both sides.
+     *
+     * Tags are one identity per name regardless of case — `lib/customers/tags.ts`
+     * enforces that on write, reusing an existing "wholesale" when somebody
+     * later types "Wholesale". A case-*sensitive* read would therefore disagree
+     * with the writer: the merchant picks "Wholesale" from their own tag list,
+     * the row is stored as "wholesale", and the segment matches nobody.
+     */
+    const list = toArray(value).map((entry) => String(entry).toLocaleLowerCase())
     if (list.length === 0) return operator === 'not_in' || operator === 'neq' ? 'true' : 'false'
     const predicate = `exists (
       select 1 from customer_tags ct
       join tags t on t.id = ct.tag_id
-      where ct.customer_id = c.id and t.name = any(${bag.add(list, 'text[]')})
+      where ct.customer_id = c.id and lower(t.name) = any(${bag.add(list, 'text[]')})
     )`
     return operator === 'not_in' || operator === 'neq' ? `not ${predicate}` : predicate
   }

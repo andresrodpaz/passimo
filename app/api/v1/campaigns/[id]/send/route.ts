@@ -7,6 +7,7 @@ import { recordAudit } from '@/lib/audit'
 import { dispatchMessage } from '@/lib/messaging/dispatch'
 import { countSegment, resolveSegmentDefinition } from '@/lib/segments/resolve'
 import { configuredChannels } from '@/lib/messaging/providers'
+import { requireWithinLimit, trackUsage } from '@/lib/billing/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -88,6 +89,36 @@ export const POST = defineRoute(
     const reach = await countSegment(business.businessId, definition)
     if (reach === 0) throw unprocessable('This audience is empty — nobody would receive it')
 
+    /*
+     * Both meters are checked here, before anything is queued.
+     *
+     * `campaigns_per_month` had no enforcement anywhere: the cap was defined,
+     * displayed on the billing screen and refused by nothing, so a Starter
+     * merchant with a ten-a-month allowance could send five hundred. Counted on
+     * *send* rather than on create, because a draft costs nothing and charging
+     * for drafts teaches merchants to delete their own work.
+     *
+     * `messages_per_month` was tracked but never checked — `dispatchMessage`
+     * incremented the counter after each send and no caller ever asked whether
+     * there was room. That is the expensive one: a 5,000-person list on three
+     * channels is 15,000 provider messages, and email, SMS and WhatsApp are all
+     * billed to us per message.
+     *
+     * Reserved against `reach × channels`, the worst case, so a merchant is told
+     * they are short *before* a partial send goes out and leaves half an audience
+     * messaged. Consent filtering and unreachable rows mean the real figure is
+     * lower, and the difference is refunded implicitly: `trackUsage` in
+     * `dispatchMessage` counts what actually left, so the reservation shapes the
+     * decision without permanently burning the allowance.
+     */
+    const sendableChannels = channels.filter((channel) => available.includes(channel))
+    await requireWithinLimit(business.businessId, 'campaigns_per_month')
+    await requireWithinLimit(
+      business.businessId,
+      'messages_per_month',
+      reach * Math.max(1, sendableChannels.length)
+    )
+
     const runAfter = body.scheduledAt ? new Date(body.scheduledAt) : new Date()
 
     await admin
@@ -109,6 +140,10 @@ export const POST = defineRoute(
         idempotencyKey: `campaign:${params.id}:dispatch`,
       }
     )
+
+    // Counted after the work is committed to the queue, so a validation failure
+    // above never burns a campaign from the merchant's monthly allowance.
+    await trackUsage(business.businessId, 'campaigns', 1)
 
     await recordAudit({
       businessId: business.businessId,

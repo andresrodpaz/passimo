@@ -383,10 +383,21 @@ function CounterPanel({
           </div>
         </div>
 
-        <dl className="mt-4 grid grid-cols-3 gap-3">
+        {/*
+          Two columns on a phone, three from `sm` up.
+          
+          The first two figures are numbers and fit anywhere. The third is a
+          *sentence* — "160 points away" — and at 412px a third of the row
+          rendered it as "160 poi…", truncating the one figure on the panel that
+          answers the question the demo is asking. It spans the full width on a
+          phone and wraps rather than clipping.
+        */}
+        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Figure label={t('landing.demo.merchantVisits')} value={formatNumber(state.visits)} />
           <Figure label={t('landing.demo.points')} value={formatNumber(state.points)} />
           <Figure
+            className="col-span-2 sm:col-span-1"
+            wrap
             label={t('landing.demo.nextReward')}
             value={
               ready
@@ -797,11 +808,35 @@ function PanelHeader({
   )
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
+function Figure({
+  label,
+  value,
+  wrap = false,
+  className,
+}: {
+  label: string
+  value: string
+  /**
+   * Lets the value run onto a second line instead of being clipped.
+   *
+   * On for figures whose value is a sentence rather than a number. A truncated
+   * number is still readable as "big"; a truncated sentence — "160 poi…" — has
+   * simply lost its meaning.
+   */
+  wrap?: boolean
+  className?: string
+}) {
   return (
-    <div className="min-w-0">
+    <div className={cn('min-w-0', className)}>
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 truncate text-lg font-semibold tabular-nums">{value}</dd>
+      <dd
+        className={cn(
+          'mt-0.5 text-lg font-semibold tabular-nums',
+          wrap ? 'break-words' : 'truncate'
+        )}
+      >
+        {value}
+      </dd>
     </div>
   )
 }

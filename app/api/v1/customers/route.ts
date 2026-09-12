@@ -2,6 +2,7 @@ import { defineRoute } from '@/lib/api/handler'
 import { createCustomerSchema, listCustomersQuery } from '@/lib/api/schemas'
 import { listCustomers } from '@/lib/customers/service'
 import { getDb } from '@/lib/db'
+import { addCustomerTags } from '@/lib/customers/tags'
 import { conflict, unprocessable } from '@/lib/errors'
 import { recordAudit } from '@/lib/audit'
 import { enqueue } from '@/lib/jobs/queue'
@@ -104,25 +105,10 @@ export const POST = defineRoute(
         .eq('id', payload.customer_id)
     }
 
+    // Additive here, not replacing: enrolment is contributing tags, not
+    // declaring the final set. Shared with CSV import and the profile editor.
     if (body.tags?.length) {
-      for (const name of body.tags) {
-        const { data: tag } = await admin
-          .from('tags')
-          .upsert({ business_id: business.businessId, name }, { onConflict: 'business_id,name' })
-          .select('id')
-          .maybeSingle()
-        if (tag) {
-          await admin.from('customer_tags').upsert(
-            {
-              customer_id: payload.customer_id,
-              tag_id: tag.id,
-              business_id: business.businessId,
-              tagged_by: actor.id,
-            },
-            { onConflict: 'customer_id,tag_id', ignoreDuplicates: true }
-          )
-        }
-      }
+      await addCustomerTags(business.businessId, payload.customer_id, body.tags)
     }
 
     if (payload.is_new) {

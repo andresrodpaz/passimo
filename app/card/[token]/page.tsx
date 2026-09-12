@@ -98,9 +98,23 @@ export default function CardPage({ params }: { params: Promise<{ token: string }
   }, [token, t])
 
   if (error) {
+    /*
+     * A card link that no longer resolves used to render one grey sentence on an
+     * otherwise empty screen. The customer is standing at a counter holding a
+     * phone that says "this link has expired" and nothing else — no explanation
+     * of why, and nothing to do about it. Naming the remedy is the whole point:
+     * the shop can reissue the link in a second, and the person needs to know
+     * that is the answer.
+     */
     return (
-      <main className="flex min-h-screen items-center justify-center p-6 text-center">
-        <p className="max-w-xs text-sm text-muted-foreground">{error}</p>
+      <main className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
+        <div className="w-full max-w-sm rounded-2xl border bg-card p-6 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
+            <CreditCard className="size-6 text-muted-foreground" aria-hidden />
+          </div>
+          <h1 className="mt-4 text-lg font-semibold">{error}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t('card.linkExpiredBody')}</p>
+        </div>
       </main>
     )
   }
@@ -292,7 +306,10 @@ export default function CardPage({ params }: { params: Promise<{ token: string }
             <h2 className="mb-3 text-center text-sm font-medium text-muted-foreground">
               {t('card.keepItOnYourPhone')}
             </h2>
-            <WalletButtons appleUrl={data.wallet.apple} googleUrl={data.wallet.google} />
+            <WalletButtons
+              appleUrl={data.wallet.apple_available ? data.wallet.apple : null}
+              googleUrl={data.wallet.google_available ? data.wallet.google : null}
+            />
           </section>
         )}
 

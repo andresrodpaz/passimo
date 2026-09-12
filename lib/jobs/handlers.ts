@@ -13,6 +13,11 @@ import { retryNotification } from '@/lib/wallet/notifications'
 import { reportPosition } from '@/lib/wallet/proximity'
 import type { WalletPlatform } from '@/lib/wallet/types'
 import { generateInsights } from '@/lib/ai/capabilities'
+import {
+  UpgradeRequiredError,
+  hasFeature,
+  meterAction,
+} from '@/lib/billing/entitlements'
 import { importCustomerRows } from '@/lib/customers/import'
 import { exportCustomerData, eraseCustomerData } from '@/lib/gdpr/requests'
 import { num, type Channel } from '@/lib/domain/types'
@@ -367,7 +372,37 @@ const generateAiInsights: JobHandler = async (payload) => {
   const businessId = payload.businessId as string
   if (!env.ai.isConfigured) return { skipped: 'ai_not_configured' }
 
-  const insights = await generateInsights(businessId)
+  /*
+   * The one AI call nobody asked for, so the one that has to be governed hardest.
+   *
+   * `cron.daily` enqueues this for every non-archived workspace, which used to
+   * mean a model call per business per day with no entitlement check and no
+   * metering: a thousand tenants was a thousand daily inferences billed to us
+   * whether or not any of them were paying for AI, and a lapsed workspace that
+   * had cancelled six months ago kept generating insights nobody could read.
+   *
+   * Two gates now. `advanced_analytics` decides whether automatic daily insights
+   * are part of what this plan bought — Starter has the `ai` feature and a real
+   * allowance, but its twenty-five actions a month belong to the merchant's own
+   * campaign copy rather than to a background job that would eat all of them by
+   * the 25th. And `meterAction` charges the call against `ai_actions_per_month`
+   * so the feed stops on its own at the cap instead of running unbounded.
+   *
+   * Returning a reason rather than throwing: this is a swept job, and a plan that
+   * does not include the feature is a normal outcome, not a failure to retry.
+   */
+  if (!(await hasFeature(businessId, 'advanced_analytics'))) {
+    return { skipped: 'not_entitled' }
+  }
+
+  const insights = await meterAction(businessId, 'ai_actions', 1, () =>
+    generateInsights(businessId)
+  ).catch((cause: unknown) => {
+    if (cause instanceof UpgradeRequiredError) return null
+    throw cause
+  })
+
+  if (insights === null) return { skipped: 'ai_allowance_exhausted' }
   if (insights.length === 0) return { insights: 0 }
 
   const admin = getDb()

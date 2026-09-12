@@ -8,9 +8,11 @@ import { renderTemplate, truncateForChannel, type TemplateContext } from '@/lib/
 import { emailBrandFromRow, renderBrandedEmail } from '@/lib/messaging/email-layout'
 import { resolveLocale } from '@/lib/i18n/locales'
 import { createTranslator } from '@/lib/i18n/translate'
-import { trackUsage } from '@/lib/billing/entitlements'
+import { measureLimit, trackUsage } from '@/lib/billing/entitlements'
+import { reportSoftLimit } from '@/lib/billing/soft-limit'
 import { num, type Channel } from '@/lib/domain/types'
 import { realEmailOrNull } from '@/lib/customers/placeholder-email'
+import { issueCardToken } from '@/lib/loyalty/card-token'
 
 /**
  * The single exit point for every outbound customer message.
@@ -61,6 +63,33 @@ export async function dispatchMessage(request: DispatchRequest): Promise<Dispatc
   const { customer, business } = context
 
   if (customer.status !== 'active') return skip(request, 'customer_inactive')
+
+  /*
+   * The monthly message allowance, enforced once, for marketing only.
+   *
+   * `trackUsage` below has always counted sends; nothing ever *checked* the
+   * count, so `messages_per_month` was a number on the billing screen that
+   * refused nothing. Every channel here is billed to us per message, so an
+   * uncapped meter is an uncapped cost.
+   *
+   * Marketing only, and deliberately so. A transactional message is the product
+   * working — "your reward is ready", a wallet update, a receipt — and refusing
+   * one to sell an upgrade breaks something the merchant's customer is waiting
+   * for. Marketing is the merchant choosing to spend, which is the thing a plan
+   * is allowed to bound.
+   *
+   * Checked here rather than at each call site because this is the only place a
+   * message leaves the system, so a new send path is governed by construction.
+   */
+  if (category === 'marketing') {
+    const allowance = await measureLimit(request.businessId, 'messages_per_month')
+    if (allowance.exceeded) {
+      // Tells the owner, at most once a day, and records the overage so the
+      // billing screen can explain the silence.
+      void reportSoftLimit(request.businessId, 'messages_per_month')
+      return skip(request, 'message_allowance_exhausted')
+    }
+  }
 
   const channels =
     request.channel === 'auto'
@@ -401,7 +430,7 @@ async function renderMessage(
     days_since_visit: customer.last_visit
       ? Math.floor((Date.now() - new Date(customer.last_visit).getTime()) / 86_400_000)
       : 0,
-    card_url: `${env.appUrl}/card/${signToken('card', { c: customer.id }, 365 * 86_400)}`,
+    card_url: `${env.appUrl}/card/${await issueCardToken(customer.id)}`,
     review_url: business.google_review_url ?? '',
     unsubscribe_url: unsubscribeUrl ?? '',
     ...request.extraContext,

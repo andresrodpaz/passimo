@@ -83,12 +83,12 @@ describe('what a merchant is shown', () => {
   })
 
   it('offers card design on every purchasable plan', () => {
-    // €5/month Starter included. Gating the signature feature of the product
+    // $29/month Starter included. Gating the signature feature of the product
     // behind an upgrade would be a worse bug than hiding it was.
     const item = CHECKLIST_ITEMS.find((candidate) => candidate.key === 'cardDesign')!
     expect(item.feature).toBeUndefined()
 
-    for (const plan of ['starter', 'growth', 'pro', 'business'] as const) {
+    for (const plan of ['starter', 'growth', 'pro'] as const) {
       const keys = resolveChecklist(facts(), has(plan)).items.map((entry) => entry.key)
       expect(keys, `${plan} cannot reach the card designer`).toContain('cardDesign')
     }
@@ -103,19 +103,26 @@ describe('what a merchant is shown', () => {
 
     expect(keys).toContain('firstScan')
     expect(keys).toContain('branding')
+    /*
+     * Campaigns are on Starter now, so a $29 merchant is told to switch one on
+     * rather than sold one. What Starter still cannot do is the merchant-set
+     * geofence and the partner network, and those two stay hidden.
+     */
+    expect(keys).toContain('campaign')
+    expect(keys).toContain('team')
     expect(keys).not.toContain('coalition')
-    expect(keys).not.toContain('campaign')
     expect(keys).not.toContain('proximity')
+    expect(keys).not.toContain('locations')
   })
 
-  it('shows the full list on a plan that includes everything', () => {
-    const business = resolveChecklist(facts(), has('business'))
-    expect(business.items).toHaveLength(CHECKLIST_ITEMS.length)
+  it('shows the full list on the plan that includes everything', () => {
+    const pro = resolveChecklist(facts(), has('pro'))
+    expect(pro.items).toHaveLength(CHECKLIST_ITEMS.length)
   })
 
   it('reports progress against what is actually visible', () => {
-    // Counting hidden items would show "1 of 6" to a Starter merchant who can
-    // only ever reach two of them.
+    // Counting hidden items would show "1 of 8" to a Starter merchant who can
+    // only ever reach some of them.
     const starter = resolveChecklist(facts({ scanCount: 3 }), has('starter'))
     expect(starter.done).toBe(1)
     expect(starter.items.filter((item) => item.done)).toHaveLength(1)
@@ -125,7 +132,13 @@ describe('what a merchant is shown', () => {
 
   it('retires itself once every visible step is done', () => {
     const complete = resolveChecklist(
-      facts({ scanCount: 5, brandingCustomised: true, cardDesignCustomised: true }),
+      facts({
+        scanCount: 5,
+        brandingCustomised: true,
+        cardDesignCustomised: true,
+        campaignCount: 1,
+        teamMemberCount: 2,
+      }),
       has('starter')
     )
     expect(complete.complete).toBe(true)
@@ -148,7 +161,7 @@ describe('what a merchant is shown', () => {
     // Every plan includes at least the scan and the branding steps, so the
     // component's "nothing to show" branch is a safety net rather than a state a
     // real merchant reaches.
-    for (const plan of ['starter', 'growth', 'pro', 'business'] as const) {
+    for (const plan of ['starter', 'growth', 'pro'] as const) {
       expect(resolveChecklist(facts(), has(plan)).total).toBeGreaterThan(0)
     }
   })

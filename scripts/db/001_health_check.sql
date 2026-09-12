@@ -45,12 +45,12 @@ select
 
 select
   case
-    when count(*) = 24 then 'PASS'
+    when count(*) = 25 then 'PASS'
     when count(*) = 0 then 'FAIL'
     else 'WARNING'
   end as status,
   count(*) as applied,
-  24 as expected_at_time_of_writing,
+  25 as expected_at_time_of_writing,
   max(name) as latest,
   max(applied_at) as latest_applied_at
 from schema_migrations;

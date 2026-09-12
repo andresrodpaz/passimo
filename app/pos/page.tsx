@@ -65,6 +65,18 @@ function PosScreen() {
     // `dvh` rather than `vh`: mobile browser chrome would otherwise push the
     // footer controls off screen exactly when they are needed.
     <main className="h-dvh overflow-hidden">
+      {/*
+        The counter is a viewfinder, so it has no visible title — and it had no
+        heading of any kind, which made it the one primary screen in the product
+        that announced nothing. A screen-reader user arriving here got a main
+        landmark containing a video element and some icon buttons, with no way to
+        know which screen they were on.
+
+        Visually hidden rather than shown: the merchant already knows they
+        pressed "Scan", and a title bar would cost the viewfinder vertical space
+        it needs at a till.
+      */}
+      <h1 className="sr-only">{t('pos.title')}</h1>
       <CounterScanner
         businessId={businessId}
         canEarn={can('loyalty:earn')}

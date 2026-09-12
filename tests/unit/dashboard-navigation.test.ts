@@ -63,7 +63,7 @@ describe('the card designer is reachable', () => {
   })
 
   it('is not gated behind a plan', () => {
-    // Card design is included from Starter (€5/month) up. There is no free
+    // Card design is included from Starter ($29/month) up. There is no free
     // plan, so "every plan" and "every paying plan" are the same set.
     expect(entry(DESIGNER_HREF).feature).toBeUndefined()
 

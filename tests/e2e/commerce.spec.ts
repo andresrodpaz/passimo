@@ -129,28 +129,85 @@ test.describe('new dashboard routes', () => {
 test.describe('pricing page', () => {
   test('renders every purchasable tier from the plan catalogue', async ({ page }) => {
     await page.goto('/#pricing')
-    // The four purchasable plans in lib/billing/plans.ts. `lapsed` is an internal
+    // The three purchasable plans in lib/billing/plans.ts. `lapsed` is an internal
     // state and must never appear on a pricing page.
-    for (const name of ['Starter', 'Growth', 'Pro', 'Business']) {
+    for (const name of ['Starter', 'Growth', 'Pro']) {
       await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
+    }
+    // And the fourth tier is gone. A stale "Business" card would be a $99 column
+    // beside Pro's $99 column, with no way for a visitor to tell them apart.
+    await expect(page.getByText('Business', { exact: true })).toHaveCount(0)
+  })
+
+  test('publishes exactly $29, $59 and $99', async ({ page }) => {
+    /*
+     * The three official prices, on the page a visitor actually reads. Rendered
+     * from `lib/billing/plans.ts`, so this failing means either the catalogue
+     * moved or a surface stopped reading it — and the second is the dangerous
+     * one, because it is how a pricing page comes to advertise a number checkout
+     * will not honour.
+     */
+    await page.goto('/#pricing')
+
+    for (const price of ['$29', '$59', '$99'] as const) {
+      await expect(page.getByText(price, { exact: false }).first()).toBeVisible()
+    }
+    // The prices the catalogue used to carry. Any of them still on the page is a
+    // surface that was not regenerated.
+    for (const stale of [/\$5(?!\d)/, /\$19(?!\d)/, /\$49(?!\d)/] as const) {
+      await expect(page.getByText(stale)).toHaveCount(0)
     }
   })
 
   test('offers no free tier, and shows the entry price', async ({ page }) => {
     /*
      * The product decision this pins: there is no free plan, and the entry price
-     * is $5/month. A "Free" card reappearing on the pricing page — from a
+     * is $29/month. A "Free" card reappearing on the pricing page — from a
      * copy-paste, a stale translation, a reverted plan definition — would be a
      * pricing claim the product does not honour, and the merchant would find out
      * at checkout.
      *
-     * "Start free trial" is fine and deliberate: a trial is not a tier.
+     * "14-day trial" is fine and deliberate: a trial is not a tier.
+     *
+     * The assertions are *structural* rather than a search for the word "free",
+     * because the FAQ asks "Is there a free plan?" and answers "No" — copy that
+     * exists precisely to settle this question, and which a keyword sweep flags as
+     * the thing it was written to deny. So: no zero price anywhere, no card named
+     * Free, and the FAQ answer must actually be a refusal.
      */
     await page.goto('/#pricing')
 
     await expect(page.getByText('Free', { exact: true })).toHaveCount(0)
-    await expect(page.getByText(/free plan|free tier|free forever/i)).toHaveCount(0)
-    await expect(page.getByText(/from .?.?5\s*\/?\s*month/i).first()).toBeVisible()
+    await expect(page.getByText('$0', { exact: false })).toHaveCount(0)
+    await expect(page.getByText(/0\s*\/\s*month/i)).toHaveCount(0)
+    await expect(page.getByText(/from .?.?29\s*\/?\s*month/i).first()).toBeVisible()
+
+    // And the question is answered, in the negative, where a visitor looks for it.
+    await page.getByText(/is there a free plan/i).click()
+    await expect(page.getByText(/^No\./i).first()).toBeVisible()
+  })
+
+  test('says what every plan includes, so Starter does not read as a teaser', async ({
+    page,
+  }) => {
+    /*
+     * The pricing cards list only differences, which means the shared floor has to
+     * be stated somewhere or a visitor reading the Starter column reasonably
+     * concludes the wallet card designer is a paid extra. That misreading is the
+     * difference between "$29 is reasonable" and "$29 is the crippled one".
+     */
+    await page.goto('/#pricing')
+    await expect(page.getByText(/in every plan/i).first()).toBeVisible()
+    await expect(page.getByText(/card designer/i).first()).toBeVisible()
+  })
+
+  test('shows the ROI example as an example', async ({ page }) => {
+    // The arithmetic is allowed; a claim about real merchants is not. The heading
+    // and the disclaimer both have to be present, because the number without the
+    // framing is a promise we cannot keep.
+    await page.goto('/#pricing')
+    await expect(page.getByText(/example, not a promise/i).first()).toBeVisible()
+    await expect(page.getByText(/illustrative/i).first()).toBeVisible()
   })
 
   test('does not scroll horizontally on a phone', async ({ page }) => {

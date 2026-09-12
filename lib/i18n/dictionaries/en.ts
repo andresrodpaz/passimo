@@ -59,7 +59,6 @@ export const en = {
     days_other: '{count} days',
     somethingWentWrong: 'Something went wrong',
     tryAgainOrContact: 'Try again, or contact us if it keeps happening.',
-    comingSoon: 'Coming soon',
     learnMore: 'Learn more',
     preview: 'Preview',
     upgradeRequired: 'Upgrade required',
@@ -92,7 +91,7 @@ export const en = {
     demo: 'Live demo',
     wallet: 'The card',
     login: 'Log in',
-    getStarted: 'Start free trial',
+    getStarted: 'Start 14-day trial',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
   },
@@ -153,16 +152,33 @@ export const en = {
     },
     plan: {
       title: 'Pick a plan, {businessName}',
+      /*
+       * Names the tier the trial actually runs on. The old copy said "everything
+       * unlocked", which stopped being true when trials moved from Pro to Growth
+       * — and a merchant who discovers on day three that memberships were never
+       * included has been misled by us, not by Stripe.
+       */
       subtitle:
-        'Every plan includes a 14-day trial with everything unlocked, and no card is needed to start.',
-      continueTrial: 'Start my 14-day trial',
+        'Your 14-day trial is already running on {trialPlan} — no card needed. Pick what fits your shop now, and change it whenever you like.',
+      continueTrial: 'Keep going on my trial',
       continueTrialHint:
-        'You are on the trial already. Choose a plan whenever you are ready — nothing stops working today.',
+        'Nothing stops working today. You can choose a plan from Billing at any point before the trial ends.',
       choose: 'Choose {plan}',
       chosen: 'Chosen',
       recommended: 'Recommended for you',
+      recommendedWhy: 'Based on the {category} you told us about',
+      changeLater: 'You can change or cancel your plan at any time.',
+      perMonth: '/month',
       notConfigured:
         'Online checkout is not set up on this deployment, so your trial simply continues. You can change plans from the billing screen at any time.',
+      limits: {
+        customers: 'Up to {count} customers',
+        customersUnlimited: 'Unlimited customers',
+        locations_one: '{count} location',
+        locations_other: 'Up to {count} locations',
+        team_one: '{count} staff login',
+        team_other: 'Up to {count} staff logins',
+      },
     },
     location: {
       title: 'Where do customers find you?',
@@ -254,8 +270,14 @@ export const en = {
         'Digital loyalty cards in Apple Wallet and Google Wallet. Customers scan a QR code and they are in — no app to download. When they walk past your door, their card comes back to them.',
       ctaPrimary: 'Start your 14-day trial',
       ctaSecondary: 'Try the live demo',
-      noCard: 'No card required · Set up in ten minutes · From {price}/month',
-      founderPricing: 'Founder pricing for early merchants',
+      noCard: 'No card required · Set up in ten minutes · Plans from {price}/month',
+      /*
+       * Was "Founder pricing for early merchants", which promised a price lock we
+       * had not decided to honour and made the three published prices look
+       * negotiable. Early access is a real thing we are doing; a discount we
+       * never designed is not.
+       */
+      founderPricing: 'Direct access to the team while we are small',
     },
     trust: {
       title: 'Built for modern local businesses',
@@ -263,7 +285,7 @@ export const en = {
         'Designed for cafés, restaurants, retail stores, salons and gyms. We are opening early access now — be among the first to launch.',
       earlyAccess: 'Join the early access programme',
       earlyAccessBody:
-        'We are onboarding our first businesses. Early adopters get founder pricing for life, direct access to the team, and a say in what we build next.',
+        'We are onboarding our first businesses. Early adopters get direct access to the team, hands-on setup, and a real say in what we build next.',
       launching: 'Launching soon',
       builtFor: 'Made for',
       launchInOneSession: 'Launch in one session',
@@ -426,7 +448,7 @@ export const en = {
         cost: 'Monthly cost',
         costUs: 'From {price}',
         costPaper: 'Printing, forever',
-        costApp: '{price} and up',
+        costApp: 'Per-message fees on top',
         costEnterprise: 'Thousands, plus setup',
         install: 'Customer has to install an app',
         knowsCustomers: 'You know who your customers are',
@@ -451,26 +473,77 @@ export const en = {
       rewards: { title: 'Rewards', body: 'Stamps, points, tiers and gift cards from one screen.' },
     },
     pricing: {
-      title: 'Simple pricing that pays for itself',
-      subtitle: 'Every plan includes the wallet cards, the scanner and a 14-day trial with everything unlocked.',
+      title: 'Three plans. Every one of them a whole loyalty program.',
+      subtitle:
+        'Wallet cards, the card designer, the scanner and your campaigns are in every plan — including the {price} one. What the bigger plans add is scale and automation, not the basics.',
       monthly: 'Monthly',
       yearly: 'Yearly',
-      yearlyNote: 'Two months free',
+      /** The percentage is derived from the catalogue, never written down twice. */
+      yearlyNote: 'Save {percent}% — two months free on every plan',
       popular: 'Most popular',
-      cta: 'Start free trial',
+      cta: 'Start your 14-day trial',
       ctaCurrent: 'Your current plan',
       perMonth: '/month',
+      perMonthLong: 'per month',
       billedYearly: 'billed yearly',
-      trialNote: 'Fourteen days, everything unlocked, no card required. Cancel in one click.',
+      trialNote:
+        'Fourteen days on Growth, no card required. Then pick any plan — or none. Change or cancel whenever you like.',
       includesEverything: 'Everything in {plan}, plus:',
       customersLabel: 'Customers',
       locationsLabel: 'Locations',
+      teamLabel: 'Staff logins',
+      aiLabel: 'AI generations',
+      perMonthShort: '/mo',
       limitCustomers_one: '{count} customer',
       limitCustomers_other: '{count} customers',
       limitCustomersUnlimited: 'Unlimited customers',
       limitLocations_one: '{count} location',
       limitLocations_other: '{count} locations',
       limitLocationsUnlimited: 'Unlimited locations',
+      unlimited: 'Unlimited',
+      /* Everything in this block is a worked example with the arithmetic shown,
+         not a claim about what any real merchant achieved. */
+      roiTitle: 'What it has to be worth to be worth it',
+      roiBody:
+        'Example, not a promise: if your average ticket is {ticket} and Passimo brings back {visits} customers you would otherwise not have seen this month, that is {recovered} of revenue against a {price} subscription. Whether it works for you depends on your shop, your reward and your regulars — which is what the fourteen days are for.',
+      roiTicketLabel: 'Average ticket',
+      roiVisitsLabel: 'Visits recovered',
+      roiRecoveredLabel: 'Revenue in the example',
+      roiDisclaimer:
+        'Illustrative arithmetic only. We do not publish customer results, because we do not have enough of them yet to be honest about an average.',
+      everyPlanTitle: 'In every plan, including Starter',
+      everyPlan: {
+        wallet: 'Apple Wallet & Google Wallet passes',
+        designer: 'The wallet card designer',
+        brand: 'Brand kit — logo, colours, your words',
+        scanner: 'The QR scanner, on any device',
+        loyalty: 'Stamps, points, tiers and rewards',
+        customers: 'Customer profiles and history',
+        campaigns: 'Campaigns and automations',
+        ai: 'AI campaign copy',
+        /* `wallet_proximity`, which every plan has. Merchant-configured
+           geofences and scheduled proximity pushes are Growth, and are listed on
+           the Growth card rather than implied here. */
+        proximity: 'Passes that surface when customers are nearby',
+        support: 'Email support and onboarding help',
+      },
+      compareTitle: 'The only differences',
+      compareSubtitle: 'Everything else is the same product.',
+      faqTitle: 'The questions we get asked',
+      faq: {
+        freeQ: 'Is there a free plan?',
+        freeA:
+          'No. There is a 14-day trial on Growth with no card required, and after that every plan is paid. A loyalty program nobody pays for is a loyalty program nobody prints the QR code for — we would rather have fewer merchants who actually run one.',
+        switchQ: 'Can I change plan later?',
+        switchA:
+          'Any time, both directions, from your dashboard. Upgrades take effect immediately and are prorated; downgrades keep every customer, card and campaign you already have.',
+        cancelQ: 'What happens if I cancel?',
+        cancelA:
+          'Your plan runs to the end of the period you paid for. After that your dashboard stays readable and nothing is deleted — you just cannot add anything new until you reactivate.',
+        limitQ: 'What if I go over a limit?',
+        limitA:
+          'A customer is never turned away at your counter because of our limit. Scans and sign-ups keep working and we tell you, once, that you have gone over. Bulk imports and new locations are the things that wait for an upgrade.',
+      },
     },
     cta: {
       title: 'Your customers already have a wallet. Be in it.',
@@ -506,7 +579,7 @@ export const en = {
       submit: 'Sign in',
       submitting: 'Signing in…',
       noAccount: 'No account yet?',
-      signUp: 'Start a free trial',
+      signUp: 'Start a 14-day trial',
       forgot: 'Forgot your password?',
       failed: 'That email and password do not match.',
       unreachable: 'We could not reach the server. Check your connection and try again.',
@@ -573,7 +646,6 @@ export const en = {
       hasAccount: 'Already have an account?',
       login: 'Sign in',
       passwordWeak: 'Use at least 10 characters, with a number and a letter.',
-      terms: 'By continuing you accept our terms and privacy policy.',
       businessNamePlaceholder: 'The Daily Grind',
       emailPlaceholder: 'you@yourbusiness.com',
       passwordPlaceholder: 'At least 10 characters',
@@ -583,6 +655,14 @@ export const en = {
       passwordTooShort: 'Please choose a longer password — at least 10 characters.',
       passwordTooSimple: 'That password is too easy to guess. Try adding a few more words.',
       failed: 'We could not create your account. Please try again.',
+      needsTerms: 'Please agree to the terms before creating your account.',
+      terms: {
+        before: 'I agree to the',
+        terms: 'Terms of Service',
+        and: 'and the',
+        privacy: 'Privacy Policy',
+        after: '.',
+      },
       strength: { weak: 'Weak', fair: 'Fair', good: 'Good', strong: 'Strong' },
       perks: {
         wallet: 'Digital cards for Apple & Google Wallet',
@@ -651,8 +731,37 @@ export const en = {
     trial: {
       daysLeft_one: '{count} day left in your trial',
       daysLeft_other: '{count} days left in your trial',
-      body: 'You have everything unlocked. Choose a plan whenever you are ready.',
+      body: 'You have the full {plan} plan while you try it. Choose any plan whenever you are ready.',
       cta: 'See plans',
+    },
+    /**
+     * The persistent banner at the top of the dashboard.
+     *
+     * These used to be hard-coded English sentences inside the component, which
+     * meant a Spanish merchant met the one message that costs them money in a
+     * language they had not chosen. One of them also said the trial ends by
+     * moving them "to Free" — a plan that has not existed for two catalogues,
+     * and the sort of promise a merchant would reasonably feel lied to about.
+     */
+    billingNotice: {
+      delinquentTitle: 'We could not take your payment',
+      delinquentBody:
+        'Update your card to keep your plan. Your customers and history are safe either way.',
+      delinquentCta: 'Fix payment',
+      cancellingTitle: 'Your plan ends on {date}',
+      cancellingBody: 'Change your mind any time before then and nothing is interrupted.',
+      cancellingCta: 'Keep my plan',
+      endsToday: 'Your trial ends today',
+      endsInDays_one: 'Your trial ends tomorrow',
+      endsInDays_other: 'Your trial ends in {count} days',
+      endingBody:
+        'Pick a plan to keep your {plan} features. Nothing is deleted either way — your dashboard stays readable and you can reactivate in one click.',
+      endingCta: 'Choose a plan',
+      daysLeft_one: '{count} day left on your trial',
+      daysLeft_other: '{count} days left on your trial',
+      trialBody: 'You are on {plan}, no card needed. Plans start at {price}/month.',
+      trialCta: 'See plans',
+      dismiss: 'Dismiss',
     },
     notifications: {
       title: 'Notifications',
@@ -784,7 +893,61 @@ export const en = {
     },
   },
 
+  team: {
+    title: 'Your team',
+    body: 'Invite the people who work the counter. Each one signs in with their own account, and you choose what they can reach.',
+    invite: 'Invite someone',
+    emailLabel: 'Their email address',
+    emailPlaceholder: 'colleague@yourbusiness.com',
+    roleLabel: 'What can they do?',
+    nameLabel: 'Their name (optional)',
+    send: 'Send invitation',
+    sending: 'Sending…',
+    sent: 'Invitation sent to {email}.',
+    /* Shown when the deployment has no email provider: the invite is real, so
+       the merchant gets the link to pass on themselves rather than losing it. */
+    sentNoEmail: 'Invitation created, but this deployment cannot send email. Copy this link to them: {url}',
+    copyLink: 'Copy link',
+    copied: 'Copied',
+    pending: 'Invitation pending',
+    expires: 'Expires {date}',
+    revoke: 'Revoke',
+    remove: 'Remove',
+    removeConfirm: 'Remove {name} from this workspace?',
+    seatsUsed: '{used} of {allowed} seats used',
+    seatsUnlimited: '{used} seats used',
+    seatsFull: 'Every seat on your plan is taken. Free one up or move to a bigger plan to invite someone else.',
+    needsEmail: 'Enter the email address to invite.',
+    failed: 'We could not send that invitation.',
+    accept: {
+      title: 'Join the team',
+      checking: 'Checking your invitation…',
+      signIn: 'Sign in to accept this invitation.',
+      signInCta: 'Sign in',
+      signUpCta: 'Create an account',
+      joined: 'You are in. Opening your dashboard…',
+      invalid: 'This invitation is no longer valid',
+      invalidBody: 'It may have been revoked, already used, or it expired. Ask whoever invited you to send a new one.',
+      wrongAccount: 'That invitation was sent to a different email address. Sign in with the account it was sent to.',
+      open: 'Open the dashboard',
+    },
+    emails: {
+      invite: {
+        subject: 'You have been invited to a Passimo workspace',
+        body:
+          'Someone has invited you to help run their loyalty programme on Passimo. ' +
+          'Use the button below to accept — you will be asked to sign in, or to create ' +
+          'an account with this email address if you do not have one yet. ' +
+          'The invitation stops working after two weeks.',
+        cta: 'Accept the invitation',
+      },
+    },
+  },
+
   wallet: {
+    /* Brand names stay as Apple and Google write them; the verb is ours. */
+    addToApple: 'Add to Apple Wallet',
+    addToGoogle: 'Add to Google Wallet',
     title: 'Wallet & proximity',
     subtitle:
       'How your card behaves in Apple Wallet and Google Wallet — and what happens when a customer walks past.',
@@ -1141,6 +1304,18 @@ export const en = {
     },
   },
 
+  /*
+   * Shared by every surface that prints the join QR — settings, growth and the
+   * end of onboarding — so it is top level rather than duplicated three times.
+   * Written for the merchant, who is the only person who ever sees it: it names
+   * the variable to check, because "QR unavailable" alone sends them to support.
+   */
+  qr: {
+    unavailable: 'QR code unavailable',
+    unavailableBody:
+      'The public URL this app is configured with does not match the address you are using. Check NEXT_PUBLIC_APP_URL, then restart the app. Your join link still works — copy it below.',
+  },
+
   join: {
     title: 'Join {business}',
     subtitle: 'Collect {goal} {unit} and get {reward}. No app needed.',
@@ -1168,6 +1343,15 @@ export const en = {
     notFoundBody:
       'The business may have closed its loyalty program, or the link may have been typed incorrectly. Ask at the counter for a new QR code.',
     notFoundAction: 'Go to Passimo',
+    /*
+     * Distinct from `notFound` on purpose. The shop is open and its page is
+     * real — it is the loyalty club that is paused — so telling this person the
+     * program "does not exist" would be both wrong and unhelpful. They are
+     * standing at the counter; the counter is the answer.
+     */
+    unavailable: 'This loyalty club is not open right now',
+    unavailableBody:
+      '{business} has paused their loyalty program, so nobody can join at the moment. Ask at the counter — they can turn it back on.',
     loadFailed: 'We could not load this page. Please try again.',
     done: 'You’re in!',
     doneBody: 'Add your card to your phone so you never lose it.',
@@ -1427,6 +1611,17 @@ export const en = {
     logoHint: 'A square PNG, JPG or WebP, up to {max} KB. Shown on your loyalty card.',
     logoUpload: 'Upload a logo',
     logoReplace: 'Replace logo',
+    /*
+     * The share image. The hint names the one place it appears, because
+     * "cover image" on its own tells a café owner nothing about why they would
+     * want one — and the answer ("this is what your link looks like in
+     * WhatsApp") is the whole reason to upload it.
+     */
+    cover: 'Share image',
+    coverHint:
+      'A wide PNG, JPG or WebP, up to {max} KB. Shown when you paste your sign-up link into WhatsApp, Instagram or a message. Optional.',
+    coverUpload: 'Upload a share image',
+    coverReplace: 'Replace share image',
     logoUploading: 'Uploading…',
     logoUrlFallback: 'Paste a link to your logo. File uploads are off on this deployment.',
     logoErrors: {
@@ -1440,7 +1635,6 @@ export const en = {
       uploadFailed: 'We could not upload that image. Please try again.',
     },
     icon: 'Icon',
-    cover: 'Cover image',
     colors: 'Colours',
     colorsHint: 'Your card, your join page and your emails all use these.',
     primary: 'Primary',
@@ -1500,13 +1694,45 @@ export const en = {
     shareInvite: 'Share my invite',
     linkCopied: 'Link copied',
     memberSinceDate: 'Member since {date}',
-    linkExpired: 'This link has expired. Ask the shop to send you a new one.',
-    couldNotLoad: 'We could not load your card.',
+    linkExpired: 'This link has expired',
+    /* Names the remedy. The shop can reissue in a second; the customer holding
+       the dead link is the one person who does not know that. */
+    linkExpiredBody:
+      'Card links are time-limited for your security. Ask the shop to send you a new one, or scan their sign-up code again — your stamps, points and rewards are all still on your account.',
+    couldNotLoad: 'We could not load your card',
     moreToReach: '{count} more to reach {tier}',
     enableLocation: 'Show me the nearest store',
     enableLocationBody:
       'We use your location once, in your browser, to sort the list. Nothing is stored beyond a rough position.',
     locationDenied: 'No problem — here are all your locations.',
+  },
+
+  /**
+   * The unsubscribe landing page.
+   *
+   * These were hard-coded English sentences inside `app/u/[token]/page.tsx` — the
+   * only public page in the product with no i18n at all. It is also the one page
+   * that is *legally* required to work and to be comprehensible, and the customers
+   * who reach it arrive from an email with no locale cookie set. So a Spanish
+   * café's customer could click "darse de baja" in a Spanish email and land on an
+   * English screen with two English buttons deciding their consent.
+   *
+   * The page now renders in the locale the API reports for that customer, which is
+   * the language the message itself was written in.
+   */
+  unsubscribe: {
+    title: 'Unsubscribe from {business}?',
+    sendingTo: 'Messages are currently going to {email}.',
+    marketingOnly: 'Stop marketing emails only',
+    everything: 'Stop all messages',
+    keepsCard: 'You will still be able to use your loyalty card.',
+    done: 'Done',
+    doneMarketing: 'You have been removed from marketing emails.',
+    doneAll: 'You will not receive any more messages from this business.',
+    invalid: 'This link is invalid or has expired.',
+    invalidBody:
+      'Unsubscribe links are single-purpose and time-limited. If you still want to stop receiving messages, reply to any message from the business and ask them to remove you.',
+    failed: 'Something went wrong. Please try again.',
   },
 
   /**
@@ -1941,6 +2167,24 @@ export const en = {
     export: 'Export',
     import: 'Import',
     addCustomer: 'Add a customer',
+
+    /**
+     * Tagging a customer who is already a customer.
+     *
+     * Tags used to be writable only at enrolment or through a CSV column, so
+     * the profile showed read-only badges and the tag filter had nothing to
+     * filter by. This is the copy for the editor that closed that.
+     */
+    tags: {
+      none: 'No tags yet',
+      add: 'Add a tag',
+      remove: 'Remove the tag {tag}',
+      placeholder: 'wholesale, no nuts, regular…',
+      reuse: 'Used before:',
+      filterLabel: 'Filter by tag',
+      allTags: 'Any tag',
+      saveFailed: 'We could not save that tag. Please try again.',
+    },
     searchPlaceholder: 'Search by name, email or phone',
     searchLabel: 'Search customers',
     allCustomers: 'All customers',
@@ -2700,7 +2944,7 @@ export const en = {
     endsOn: 'Ends {date}',
     endsAtPeriodEnd: 'Ends at the end of the period',
     trialBody:
-      'You have full access while you try everything out. No card is needed until it ends.',
+      'You are on the full {plan} plan while you try it. No card is needed until the trial ends, and you can pick any plan below.',
     cancellingBody:
       'Your plan stays active until the end of the period. Nothing is deleted after that.',
     delinquentBody:
@@ -2717,12 +2961,43 @@ export const en = {
     usageBody:
       'Monthly counters reset on the first. Nobody is ever turned away at the counter because of a limit.',
     usageUnlimited: 'Your plan has no limits. Use as much as you need.',
+    usageUnlimitedRow: 'Unlimited',
+    usageNotIncluded: 'Not on this plan',
+    /** The three lines of an upgrade prompt: where you are, what is next, what it costs. */
+    usageAtLimit: 'You have used all {allowed} on {plan}.',
+    usageApproaching: 'You are close to your {plan} limit.',
+    usageNextPlan: '{plan} includes {allowed} — {price}/month.',
+    usageTopPlan: 'You are on our largest plan. Get in touch and we will sort out more.',
+    usageSeeUpgrade: 'Compare plans',
     plans: 'Plans',
     plansBody:
-      'Every plan includes wallet cards, the point of sale and unlimited staff scans.',
+      'Wallet cards, the card designer, the scanner, campaigns and AI copy are in every plan. Bigger plans add scale and advanced capabilities.',
     monthly: 'Monthly',
     yearly: 'Yearly',
     twoMonthsFree: '2 months free',
+    /**
+     * The downgrade conversation, held before the merchant clicks rather than
+     * after. Nothing is ever deleted for a plan change, so the honest thing to
+     * say is which of their existing rows would become read-only.
+     */
+    downgradeTitle: 'Moving to a smaller plan',
+    downgradeBody:
+      'Nothing is deleted, ever. Everything you already have stays visible and keeps working — you simply cannot add more of it until you move back up.',
+    downgradeConflicts: 'On {plan} you would be over the limit on:',
+    downgradeConflictRow: '{limit} — you have {used}, {plan} includes {allowed}',
+    downgradeNoConflicts: 'Everything you have today fits inside {plan}.',
+    downgradeReassurance:
+      'Customers keep their wallet passes. Cards keep updating. Scans keep working. Extra locations become read-only rather than closed.',
+    /** What cancelling actually does, in the order people ask about it. */
+    cancelTitle: 'If you cancel',
+    cancelAccess: 'Your plan runs until {date}. Nothing changes before then.',
+    cancelAccessNoDate: 'Your plan runs to the end of the period you have paid for.',
+    cancelData: 'Your customers, visits, rewards and campaigns are kept, not deleted.',
+    cancelWallet:
+      'Wallet passes stay on your customers’ phones, but stop updating and stop earning.',
+    cancelDashboard: 'Your dashboard stays readable. New writes are refused until you reactivate.',
+    cancelReactivate: 'Reactivating takes one click and picks up exactly where you left off.',
+    cancelHow: 'Cancel from Invoices & payment, where Stripe handles the confirmation.',
     notConfigured:
       'Online checkout is not configured on this deployment. Plans are shown for reference; contact us to change yours.',
     mostPopular: 'Most popular',
@@ -2743,14 +3018,10 @@ export const en = {
       ai: 'AI features',
       advanced_analytics: 'Advanced analytics',
       segments: 'Saved segments',
-      api_access: 'REST API',
-      webhooks: 'Webhooks',
       coalition: 'Partner network',
       multi_location: 'Multiple locations',
-      custom_branding: 'Custom branding',
+      custom_branding: 'Your brand on every card',
       priority_support: 'Priority support',
-      sso: 'Single sign-on',
-      team_management: 'Team management',
       wallet_proximity: 'Location-aware wallet passes',
       geofencing: 'Geofencing',
       proximity_campaigns: 'Proximity campaigns',
@@ -2781,43 +3052,38 @@ export const en = {
       tagline: 'Your data is safe. Reactivate any time to start serving again.',
     },
     starter: {
-      tagline: 'A real digital loyalty program for less than two coffees a month.',
-      h1: 'Stamp and points cards in Apple Wallet & Google Wallet',
-      h2: 'Built-in QR scanner — any phone, tablet or laptop',
-      h3: 'One location, up to 500 customers',
-      h4: 'Your logo and colours on every card',
-      h5: 'Location-aware passes on the lock screen',
+      tagline: 'For a small business ready to build real customer loyalty.',
+      h1: 'Stamp, points and tier cards in Apple Wallet & Google Wallet',
+      h2: 'Your logo, your colours, your card — designed by you',
+      h3: 'Built-in QR scanner on any phone, tablet or laptop',
+      h4: 'Every visit, reward and note in one customer profile',
+      h5: 'Campaigns, always-on automations and saved segments',
+      h6: 'AI writes your campaigns — 25 generations a month included',
     },
     growth: {
-      tagline: 'Bring customers back on purpose, not by luck.',
-      h1: 'Everything in Starter, up to 5,000 customers',
-      h2: 'Up to 5 locations with per-site reporting',
-      h3: 'Geofenced wallet notifications when customers walk past',
-      h4: 'Email, SMS and WhatsApp campaigns',
-      h5: 'Always-on automations: welcome, birthday, win-back',
-      h6: 'Customer segments and the no-code rule builder',
+      tagline: 'For a growing business ready to automate its retention.',
+      h1: 'Ten times the customers — up to 5,000',
+      h2: 'Up to 3 locations with per-site reporting',
+      h3: 'Geofences you set yourself — the card returns as they walk past',
+      h4: 'Retention cohorts, churn risk and campaign revenue',
+      h5: 'Sell gift cards from your own page',
+      h6: '300 AI generations and 15,000 messages a month',
     },
     pro: {
-      tagline: 'The AI marketing team you do not have to hire.',
-      h1: 'Everything in Growth, up to 25,000 customers',
-      h2: 'AI campaigns, insights and customer summaries',
+      tagline: 'For multi-location retention, memberships and deeper analytics.',
+      h1: 'Up to 20,000 customers',
+      h2: 'Up to 10 locations and 25 staff logins',
       h3: 'Paid memberships — your own recurring revenue',
-      h4: 'Churn prediction, lifetime value and cohort retention',
-      h5: 'REST API, webhooks and custom branding',
-      h6: 'Up to 15 locations',
-    },
-    business: {
-      tagline: 'For groups, franchises and anything with more than one manager.',
-      h1: 'Unlimited customers, locations and team members',
-      h2: 'Team management with roles and per-site staff',
-      h3: 'Partner network — swap customers with nearby businesses',
-      h4: 'Single sign-on and priority support',
-      h5: 'Unlimited proximity campaigns and automation rules',
-      h6: 'Migration handled by us',
+      h4: '50,000 messages a month and 100 automation rules',
+      h5: 'Partner network — shared offers with nearby businesses',
+      h6: 'Unlimited campaigns, 1,500 AI generations, priority support',
     },
   },
 
   pos: {
+    /* The counter's accessible page title. Visually hidden — the viewfinder
+       needs the vertical space, but the screen still has to announce itself. */
+    title: 'Point of sale',
     dialogTitle: 'Scan a customer',
     dialogDescription:
       'Point the camera at a customer’s wallet pass, loyalty card, reward code or gift card. You can also find them by name.',

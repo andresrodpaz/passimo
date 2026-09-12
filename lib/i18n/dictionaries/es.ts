@@ -54,7 +54,6 @@ export const es: Dictionary = {
     days_other: '{count} días',
     somethingWentWrong: 'Algo ha ido mal',
     tryAgainOrContact: 'Inténtalo de nuevo, y escríbenos si sigue ocurriendo.',
-    comingSoon: 'Próximamente',
     learnMore: 'Saber más',
     preview: 'Vista previa',
     upgradeRequired: 'Requiere otro plan',
@@ -87,7 +86,7 @@ export const es: Dictionary = {
     demo: 'Demo en vivo',
     wallet: 'La tarjeta',
     login: 'Iniciar sesión',
-    getStarted: 'Empezar prueba gratis',
+    getStarted: 'Prueba de 14 días',
     openMenu: 'Abrir menú',
     closeMenu: 'Cerrar menú',
   },
@@ -148,15 +147,26 @@ export const es: Dictionary = {
     plan: {
       title: 'Elige un plan, {businessName}',
       subtitle:
-        'Todos los planes incluyen 14 días de prueba con todo desbloqueado, y no hace falta tarjeta para empezar.',
-      continueTrial: 'Empezar mi prueba de 14 días',
+        'Tu prueba de 14 días ya está en marcha en {trialPlan}, sin tarjeta. Elige lo que le encaje a tu local ahora y cámbialo cuando quieras.',
+      continueTrial: 'Seguir con mi prueba',
       continueTrialHint:
-        'Ya estás en la prueba. Elige plan cuando quieras: hoy no deja de funcionar nada.',
+        'Hoy no deja de funcionar nada. Puedes elegir plan desde Facturación en cualquier momento antes de que acabe la prueba.',
       choose: 'Elegir {plan}',
       chosen: 'Elegido',
       recommended: 'Recomendado para ti',
+      recommendedWhy: 'Por el {category} que nos has dicho',
+      changeLater: 'Puedes cambiar o cancelar tu plan en cualquier momento.',
+      perMonth: '/mes',
       notConfigured:
         'El pago online no está configurado en este despliegue, así que tu prueba continúa sin más. Puedes cambiar de plan desde la pantalla de facturación cuando quieras.',
+      limits: {
+        customers: 'Hasta {count} clientes',
+        customersUnlimited: 'Clientes ilimitados',
+        locations_one: '{count} local',
+        locations_other: 'Hasta {count} locales',
+        team_one: '{count} acceso de equipo',
+        team_other: 'Hasta {count} accesos de equipo',
+      },
     },
     location: {
       title: '¿Dónde te encuentran tus clientes?',
@@ -242,8 +252,8 @@ export const es: Dictionary = {
         'Tarjetas de fidelización digitales en Apple Wallet y Google Wallet. El cliente escanea un QR y ya está dentro: sin descargar ninguna app. Y cuando pasa por tu puerta, su tarjeta vuelve a aparecer.',
       ctaPrimary: 'Empezar prueba de 14 días',
       ctaSecondary: 'Probar la demo',
-      noCard: 'Sin tarjeta de crédito · Listo en diez minutos · Desde {price}/mes',
-      founderPricing: 'Precios de lanzamiento para los primeros negocios',
+      noCard: 'Sin tarjeta de crédito · Listo en diez minutos · Planes desde {price}/mes',
+      founderPricing: 'Trato directo con el equipo mientras seamos pequeños',
     },
     trust: {
       title: 'Hecho para negocios locales de hoy',
@@ -251,7 +261,7 @@ export const es: Dictionary = {
         'Diseñado para cafeterías, restaurantes, tiendas, peluquerías y gimnasios. Estamos abriendo el acceso anticipado: sé de los primeros en lanzar.',
       earlyAccess: 'Únete al acceso anticipado',
       earlyAccessBody:
-        'Estamos incorporando a nuestros primeros negocios. Quien entre ahora mantiene el precio de lanzamiento de por vida, habla directamente con el equipo y decide qué construimos después.',
+        'Estamos incorporando a nuestros primeros negocios. Quien entre ahora habla directamente con el equipo, tiene ayuda para configurarlo y decide qué construimos después.',
       launching: 'Lanzamiento inminente',
       builtFor: 'Pensado para',
       launchInOneSession: 'Lánzalo en una sola sesión',
@@ -420,7 +430,7 @@ export const es: Dictionary = {
         cost: 'Coste mensual',
         costUs: 'Desde {price}',
         costPaper: 'Imprimir, para siempre',
-        costApp: 'Desde {price}',
+        costApp: 'Y coste por mensaje aparte',
         costEnterprise: 'Miles, más implantación',
         install: 'El cliente tiene que instalar una app',
         knowsCustomers: 'Sabes quiénes son tus clientes',
@@ -445,27 +455,71 @@ export const es: Dictionary = {
       rewards: { title: 'Recompensas', body: 'Sellos, puntos, niveles y tarjetas regalo desde una pantalla.' },
     },
     pricing: {
-      title: 'Precios sencillos que se pagan solos',
+      title: 'Tres planes. Los tres, un programa de fidelización completo.',
       subtitle:
-        'Todos los planes incluyen las tarjetas wallet, el escáner y 14 días de prueba con todo desbloqueado.',
+        'Las tarjetas del wallet, el diseñador de tarjeta, el escáner y tus campañas están en todos los planes, incluido el de {price}. Lo que añaden los planes mayores es escala y automatización, no lo básico.',
       monthly: 'Mensual',
       yearly: 'Anual',
-      yearlyNote: 'Dos meses gratis',
-      popular: 'Más popular',
-      cta: 'Empezar prueba gratis',
+      yearlyNote: 'Ahorra un {percent}%: dos meses gratis en cualquier plan',
+      popular: 'El más elegido',
+      cta: 'Empezar mi prueba de 14 días',
       ctaCurrent: 'Tu plan actual',
       perMonth: '/mes',
+      perMonthLong: 'al mes',
       billedYearly: 'facturado al año',
-      trialNote: 'Catorce días, todo desbloqueado, sin tarjeta. Cancelas con un clic.',
+      trialNote:
+        'Catorce días en Growth, sin tarjeta. Después eliges el plan que quieras, o ninguno. Cambia o cancela cuando te apetezca.',
       includesEverything: 'Todo lo de {plan}, y además:',
       customersLabel: 'Clientes',
       locationsLabel: 'Locales',
+      teamLabel: 'Accesos de equipo',
+      aiLabel: 'Generaciones de IA',
+      perMonthShort: '/mes',
       limitCustomers_one: '{count} cliente',
       limitCustomers_other: '{count} clientes',
       limitCustomersUnlimited: 'Clientes ilimitados',
       limitLocations_one: '{count} local',
       limitLocations_other: '{count} locales',
       limitLocationsUnlimited: 'Locales ilimitados',
+      unlimited: 'Ilimitado',
+      roiTitle: 'Cuánto tiene que valerte para que valga la pena',
+      roiBody:
+        'Ejemplo, no una promesa: si tu ticket medio es de {ticket} y Passimo te trae de vuelta a {visits} clientes que este mes no habrías visto, son {recovered} de ingresos frente a una suscripción de {price}. Que te funcione depende de tu local, de tu premio y de tus clientes de siempre: para eso son los catorce días.',
+      roiTicketLabel: 'Ticket medio',
+      roiVisitsLabel: 'Visitas recuperadas',
+      roiRecoveredLabel: 'Ingresos del ejemplo',
+      roiDisclaimer:
+        'Solo aritmética ilustrativa. No publicamos resultados de clientes porque todavía no tenemos suficientes para dar una media honesta.',
+      everyPlanTitle: 'En todos los planes, también en Starter',
+      everyPlan: {
+        wallet: 'Tarjetas para Apple Wallet y Google Wallet',
+        designer: 'El diseñador de tarjeta del wallet',
+        brand: 'Kit de marca: logo, colores y tus palabras',
+        scanner: 'El escáner de QR, en cualquier dispositivo',
+        loyalty: 'Sellos, puntos, niveles y premios',
+        customers: 'Fichas de cliente e historial',
+        campaigns: 'Campañas y automatizaciones',
+        ai: 'Textos de campaña con IA',
+        proximity: 'Tarjetas que aparecen cuando el cliente está cerca',
+        support: 'Soporte por correo y ayuda para configurarlo',
+      },
+      compareTitle: 'Las únicas diferencias',
+      compareSubtitle: 'Todo lo demás es el mismo producto.',
+      faqTitle: 'Lo que nos preguntáis',
+      faq: {
+        freeQ: '¿Hay un plan gratis?',
+        freeA:
+          'No. Hay 14 días de prueba en Growth sin tarjeta, y después todos los planes son de pago. Un programa de fidelización que nadie paga es un programa que nadie llega a imprimir en un QR: preferimos tener menos comercios pero que lo usen de verdad.',
+        switchQ: '¿Puedo cambiar de plan después?',
+        switchA:
+          'Cuando quieras y en los dos sentidos, desde tu panel. Las subidas se aplican al momento y se prorratean; las bajadas conservan todos los clientes, tarjetas y campañas que ya tengas.',
+        cancelQ: '¿Qué pasa si cancelo?',
+        cancelA:
+          'Tu plan sigue hasta el final del periodo que has pagado. Después tu panel se sigue pudiendo consultar y no se borra nada: solo no podrás añadir cosas nuevas hasta que reactives.',
+        limitQ: '¿Y si me paso de un límite?',
+        limitA:
+          'A ningún cliente se le rechaza en tu mostrador por un límite nuestro. Los escaneos y las altas siguen funcionando y te avisamos, una vez, de que te has pasado. Lo que espera a una subida de plan son las importaciones masivas y los locales nuevos.',
+      },
     },
     cta: {
       title: 'Tus clientes ya llevan una wallet. Que estés dentro.',
@@ -485,8 +539,8 @@ export const es: Dictionary = {
       about: 'Quiénes somos',
       contact: 'Contacto',
       earlyAccess: 'Acceso anticipado',
-      privacy: 'Privacidad',
       terms: 'Términos',
+      privacy: 'Privacidad',
       cookies: 'Cookies',
       rights: 'Todos los derechos reservados.',
       builtIn: 'Hecho para negocios locales.',
@@ -502,7 +556,7 @@ export const es: Dictionary = {
       submit: 'Entrar',
       submitting: 'Entrando…',
       noAccount: '¿Aún no tienes cuenta?',
-      signUp: 'Empezar prueba gratis',
+      signUp: 'Empezar una prueba de 14 días',
       forgot: '¿Has olvidado la contraseña?',
       failed: 'Ese email y esa contraseña no coinciden.',
       unreachable: 'No hemos podido conectar. Comprueba tu conexión e inténtalo otra vez.',
@@ -559,7 +613,7 @@ export const es: Dictionary = {
       },
     },
     signup: {
-      title: 'Empieza tu prueba gratis',
+      title: 'Empieza tu prueba de 14 días',
       subtitle: 'Catorce días, todo desbloqueado, sin tarjeta.',
       businessName: 'Nombre del negocio',
       email: 'Email',
@@ -569,7 +623,6 @@ export const es: Dictionary = {
       hasAccount: '¿Ya tienes cuenta?',
       login: 'Iniciar sesión',
       passwordWeak: 'Usa al menos 10 caracteres, con un número y una letra.',
-      terms: 'Al continuar aceptas nuestros términos y la política de privacidad.',
       businessNamePlaceholder: 'Café Central',
       emailPlaceholder: 'tu@negocio.com',
       passwordPlaceholder: 'Al menos 10 caracteres',
@@ -579,6 +632,14 @@ export const es: Dictionary = {
       passwordTooShort: 'Elige una contraseña más larga: al menos 10 caracteres.',
       passwordTooSimple: 'Esa contraseña es fácil de adivinar. Prueba a añadir alguna palabra más.',
       failed: 'No hemos podido crear tu cuenta. Inténtalo otra vez.',
+      needsTerms: 'Acepta los términos antes de crear la cuenta.',
+      terms: {
+        before: 'Acepto los',
+        terms: 'Términos del servicio',
+        and: 'y la',
+        privacy: 'Política de privacidad',
+        after: '.',
+      },
       strength: { weak: 'Débil', fair: 'Aceptable', good: 'Buena', strong: 'Fuerte' },
       perks: {
         wallet: 'Tarjetas digitales para Apple y Google Wallet',
@@ -651,8 +712,28 @@ export const es: Dictionary = {
     trial: {
       daysLeft_one: 'Queda {count} día de prueba',
       daysLeft_other: 'Quedan {count} días de prueba',
-      body: 'Tienes todo desbloqueado. Elige un plan cuando quieras.',
+      body: 'Tienes el plan {plan} completo mientras lo pruebas. Elige el plan que quieras cuando estés listo.',
       cta: 'Ver planes',
+    },
+    billingNotice: {
+      delinquentTitle: 'No hemos podido cobrarte',
+      delinquentBody:
+        'Actualiza tu tarjeta para mantener tu plan. Tus clientes y tu historial están a salvo en cualquier caso.',
+      delinquentCta: 'Arreglar el pago',
+      cancellingTitle: 'Tu plan termina el {date}',
+      cancellingBody: 'Cambia de opinión cuando quieras antes de esa fecha y no se interrumpe nada.',
+      cancellingCta: 'Mantener mi plan',
+      endsToday: 'Tu prueba termina hoy',
+      endsInDays_one: 'Tu prueba termina mañana',
+      endsInDays_other: 'Tu prueba termina en {count} días',
+      endingBody:
+        'Elige un plan para conservar lo que tienes en {plan}. En ningún caso se borra nada: tu panel se sigue pudiendo consultar y reactivas con un clic.',
+      endingCta: 'Elegir un plan',
+      daysLeft_one: 'Queda {count} día de prueba',
+      daysLeft_other: 'Quedan {count} días de prueba',
+      trialBody: 'Estás en {plan}, sin tarjeta. Los planes empiezan en {price}/mes.',
+      trialCta: 'Ver planes',
+      dismiss: 'Cerrar',
     },
   },
 
@@ -775,7 +856,58 @@ export const es: Dictionary = {
     },
   },
 
+  team: {
+    title: 'Tu equipo',
+    body: 'Invita a quien atiende el mostrador. Cada persona entra con su propia cuenta y tú decides a qué puede acceder.',
+    invite: 'Invitar a alguien',
+    emailLabel: 'Su email',
+    emailPlaceholder: 'companero@tunegocio.com',
+    roleLabel: '¿Qué puede hacer?',
+    nameLabel: 'Su nombre (opcional)',
+    send: 'Enviar invitación',
+    sending: 'Enviando…',
+    sent: 'Invitación enviada a {email}.',
+    sentNoEmail: 'Invitación creada, pero esta instalación no puede enviar correo. Pásale este enlace: {url}',
+    copyLink: 'Copiar enlace',
+    copied: 'Copiado',
+    pending: 'Invitación pendiente',
+    expires: 'Caduca el {date}',
+    revoke: 'Revocar',
+    remove: 'Quitar',
+    removeConfirm: '¿Quitar a {name} de este espacio?',
+    seatsUsed: '{used} de {allowed} plazas usadas',
+    seatsUnlimited: '{used} plazas usadas',
+    seatsFull: 'No quedan plazas en tu plan. Libera una o pasa a un plan mayor para invitar a alguien más.',
+    needsEmail: 'Escribe el email de la persona que quieres invitar.',
+    failed: 'No hemos podido enviar esa invitación.',
+    accept: {
+      title: 'Únete al equipo',
+      checking: 'Comprobando tu invitación…',
+      signIn: 'Inicia sesión para aceptar esta invitación.',
+      signInCta: 'Iniciar sesión',
+      signUpCta: 'Crear una cuenta',
+      joined: 'Ya estás dentro. Abriendo tu panel…',
+      invalid: 'Esta invitación ya no es válida',
+      invalidBody: 'Puede que se haya revocado, que ya se haya usado o que haya caducado. Pide a quien te invitó que te envíe otra.',
+      wrongAccount: 'Esa invitación se envió a otro email. Inicia sesión con la cuenta a la que se envió.',
+      open: 'Abrir el panel',
+    },
+    emails: {
+      invite: {
+        subject: 'Te han invitado a un espacio de Passimo',
+        body:
+          'Alguien te ha invitado a ayudarle a gestionar su programa de fidelización en Passimo. ' +
+          'Usa el botón de abajo para aceptar: te pediremos iniciar sesión, o crear una cuenta ' +
+          'con este email si aún no tienes una. La invitación deja de funcionar a las dos semanas.',
+        cta: 'Aceptar la invitación',
+      },
+    },
+  },
+
   wallet: {
+    /* Brand names stay as Apple and Google write them; the verb is ours. */
+    addToApple: 'Añadir a Apple Wallet',
+    addToGoogle: 'Añadir a Google Wallet',
     title: 'Wallet y proximidad',
     subtitle:
       'Cómo se comporta tu tarjeta en Apple Wallet y Google Wallet, y qué pasa cuando un cliente pasa cerca.',
@@ -1133,6 +1265,12 @@ export const es: Dictionary = {
     },
   },
 
+  qr: {
+    unavailable: 'Código QR no disponible',
+    unavailableBody:
+      'La URL pública configurada no coincide con la dirección que estás usando. Revisa NEXT_PUBLIC_APP_URL y reinicia la aplicación. Tu enlace de alta sigue funcionando: cópialo abajo.',
+  },
+
   join: {
     title: 'Únete a {business}',
     subtitle: 'Junta {goal} {unit} y consigue {reward}. Sin instalar nada.',
@@ -1154,6 +1292,9 @@ export const es: Dictionary = {
     notFoundBody:
       'Puede que el negocio haya cerrado su programa de fidelización o que la dirección esté mal escrita. Pide un QR nuevo en el mostrador.',
     notFoundAction: 'Ir a Passimo',
+    unavailable: 'Este club de fidelización no está abierto ahora mismo',
+    unavailableBody:
+      '{business} ha pausado su programa de fidelización, así que nadie puede unirse por el momento. Pregunta en el mostrador: pueden volver a activarlo.',
     loadFailed: 'No hemos podido cargar esta página. Inténtalo otra vez.',
     done: '¡Ya estás dentro!',
     doneBody: 'Añade la tarjeta a tu móvil para no perderla nunca.',
@@ -1399,6 +1540,11 @@ export const es: Dictionary = {
     logoHint: 'Un PNG, JPG o WebP cuadrado, de hasta {max} KB. Sale en tu tarjeta de fidelidad.',
     logoUpload: 'Subir un logo',
     logoReplace: 'Cambiar el logo',
+    cover: 'Imagen para compartir',
+    coverHint:
+      'Un PNG, JPG o WebP panorámico, de hasta {max} KB. Es la imagen que se ve cuando pegas tu enlace de alta en WhatsApp, Instagram o un mensaje. Opcional.',
+    coverUpload: 'Subir imagen para compartir',
+    coverReplace: 'Cambiar la imagen para compartir',
     logoUploading: 'Subiendo…',
     logoUrlFallback: 'Pega un enlace a tu logo. En esta instalación no se pueden subir archivos.',
     logoErrors: {
@@ -1412,7 +1558,6 @@ export const es: Dictionary = {
       uploadFailed: 'No hemos podido subir esa imagen. Inténtalo otra vez.',
     },
     icon: 'Icono',
-    cover: 'Imagen de portada',
     colors: 'Colores',
     colorsHint: 'Tu tarjeta, tu página de alta y tus correos usan estos colores.',
     primary: 'Principal',
@@ -1472,13 +1617,30 @@ export const es: Dictionary = {
     shareInvite: 'Compartir mi invitación',
     linkCopied: 'Enlace copiado',
     memberSinceDate: 'Miembro desde el {date}',
-    linkExpired: 'Este enlace ha caducado. Pide uno nuevo en la tienda.',
-    couldNotLoad: 'No hemos podido cargar tu tarjeta.',
+    linkExpired: 'Este enlace ha caducado',
+    linkExpiredBody:
+      'Los enlaces de la tarjeta caducan por seguridad. Pide uno nuevo en la tienda o vuelve a escanear su código de alta: tus sellos, puntos y premios siguen en tu cuenta.',
+    couldNotLoad: 'No hemos podido cargar tu tarjeta',
     moreToReach: 'Te falta {count} para llegar a {tier}',
     enableLocation: 'Enséñame el local más cercano',
     enableLocationBody:
       'Usamos tu ubicación una vez, en tu navegador, solo para ordenar la lista. No guardamos más que una posición aproximada.',
     locationDenied: 'Sin problema: aquí están todos tus locales.',
+  },
+
+  unsubscribe: {
+    title: '¿Darte de baja de {business}?',
+    sendingTo: 'Ahora mismo los mensajes van a {email}.',
+    marketingOnly: 'Dejar de recibir solo correos comerciales',
+    everything: 'Dejar de recibir todos los mensajes',
+    keepsCard: 'Tu tarjeta de fidelización seguirá funcionando.',
+    done: 'Hecho',
+    doneMarketing: 'Te hemos quitado de los correos comerciales.',
+    doneAll: 'No volverás a recibir mensajes de este negocio.',
+    invalid: 'Este enlace no es válido o ha caducado.',
+    invalidBody:
+      'Los enlaces para darse de baja sirven una sola vez y caducan. Si aún quieres dejar de recibir mensajes, responde a cualquier mensaje del negocio y pídeles que te quiten de la lista.',
+    failed: 'Algo ha ido mal. Vuelve a intentarlo.',
   },
 
   /**
@@ -1913,6 +2075,24 @@ export const es: Dictionary = {
     export: 'Exportar',
     import: 'Importar',
     addCustomer: 'Añadir cliente',
+
+    /**
+     * Etiquetar a un cliente que ya es cliente.
+     *
+     * Antes las etiquetas solo se podían escribir al darse de alta o mediante
+     * una columna del CSV, así que la ficha mostraba insignias de solo lectura y
+     * el filtro por etiqueta no tenía nada que filtrar.
+     */
+    tags: {
+      none: 'Todavía sin etiquetas',
+      add: 'Añadir etiqueta',
+      remove: 'Quitar la etiqueta {tag}',
+      placeholder: 'mayorista, sin frutos secos, habitual…',
+      reuse: 'Ya usadas:',
+      filterLabel: 'Filtrar por etiqueta',
+      allTags: 'Cualquier etiqueta',
+      saveFailed: 'No hemos podido guardar esa etiqueta. Vuelve a intentarlo.',
+    },
     searchPlaceholder: 'Busca por nombre, correo o teléfono',
     searchLabel: 'Buscar clientes',
     allCustomers: 'Todos los clientes',
@@ -2678,7 +2858,7 @@ export const es: Dictionary = {
     endsOn: 'Termina el {date}',
     endsAtPeriodEnd: 'Termina al final del periodo',
     trialBody:
-      'Tienes acceso completo mientras lo pruebas todo. No hace falta tarjeta hasta que termine.',
+      'Tienes el plan {plan} completo mientras lo pruebas. No hace falta tarjeta hasta que termine la prueba, y puedes elegir cualquier plan de abajo.',
     cancellingBody: 'Tu plan sigue activo hasta el final del periodo. Después no se borra nada.',
     delinquentBody:
       'Tu plan actual sigue disponible mientras resolvemos el pago. Actualiza la tarjeta para que todo siga funcionando con normalidad.',
@@ -2694,12 +2874,37 @@ export const es: Dictionary = {
     usageBody:
       'Los contadores mensuales se reinician el día uno. A nadie se le rechaza en el mostrador por un límite.',
     usageUnlimited: 'Tu plan no tiene límites. Usa lo que necesites.',
+    usageUnlimitedRow: 'Ilimitado',
+    usageNotIncluded: 'No está en este plan',
+    usageAtLimit: 'Has usado los {allowed} de tu plan {plan}.',
+    usageApproaching: 'Estás cerca del límite de tu plan {plan}.',
+    usageNextPlan: '{plan} incluye {allowed} por {price}/mes.',
+    usageTopPlan: 'Estás en nuestro plan más grande. Escríbenos y lo ampliamos.',
+    usageSeeUpgrade: 'Comparar planes',
     plans: 'Planes',
     plansBody:
-      'Todos los planes incluyen las tarjetas del wallet, el punto de venta y escaneos ilimitados para tu equipo.',
+      'Las tarjetas del wallet, el diseñador de tarjeta, el escáner, las campañas y la IA están en todos los planes. Los planes mayores añaden escala y funciones avanzadas.',
     monthly: 'Mensual',
     yearly: 'Anual',
     twoMonthsFree: '2 meses gratis',
+    downgradeTitle: 'Si bajas a un plan más pequeño',
+    downgradeBody:
+      'Nunca se borra nada. Todo lo que ya tienes sigue visible y sigue funcionando: simplemente no podrás añadir más hasta que vuelvas a subir.',
+    downgradeConflicts: 'Con {plan} te pasarías del límite en:',
+    downgradeConflictRow: '{limit}: tienes {used} y {plan} incluye {allowed}',
+    downgradeNoConflicts: 'Todo lo que tienes hoy entra en {plan}.',
+    downgradeReassurance:
+      'Tus clientes conservan sus tarjetas del wallet. Las tarjetas siguen actualizándose. Los escaneos siguen funcionando. Los locales de más pasan a solo lectura, no se cierran.',
+    cancelTitle: 'Si cancelas',
+    cancelAccess: 'Tu plan sigue hasta el {date}. Antes de esa fecha no cambia nada.',
+    cancelAccessNoDate: 'Tu plan sigue hasta el final del periodo que ya has pagado.',
+    cancelData: 'Tus clientes, visitas, premios y campañas se conservan, no se borran.',
+    cancelWallet:
+      'Las tarjetas se quedan en el móvil de tus clientes, pero dejan de actualizarse y de acumular.',
+    cancelDashboard:
+      'Tu panel se sigue pudiendo consultar. Se rechaza escribir cosas nuevas hasta que reactives.',
+    cancelReactivate: 'Reactivar es un clic y retoma exactamente donde lo dejaste.',
+    cancelHow: 'Cancela desde Facturas y pago, donde Stripe se encarga de la confirmación.',
     notConfigured:
       'El pago online no está configurado en este despliegue. Los planes se muestran como referencia; escríbenos para cambiar el tuyo.',
     mostPopular: 'El más elegido',
@@ -2720,14 +2925,10 @@ export const es: Dictionary = {
       ai: 'Funciones de IA',
       advanced_analytics: 'Analítica avanzada',
       segments: 'Segmentos guardados',
-      api_access: 'API REST',
-      webhooks: 'Webhooks',
       coalition: 'Red de socios',
       multi_location: 'Varios locales',
-      custom_branding: 'Marca personalizada',
+      custom_branding: 'Tu marca en cada tarjeta',
       priority_support: 'Soporte prioritario',
-      sso: 'Inicio de sesión único',
-      team_management: 'Gestión de equipo',
       wallet_proximity: 'Tarjetas que reaccionan a la ubicación',
       geofencing: 'Geoperímetros',
       proximity_campaigns: 'Campañas por cercanía',
@@ -2758,43 +2959,38 @@ export const es: Dictionary = {
       tagline: 'Tus datos están a salvo. Reactiva cuando quieras y vuelve a atender.',
     },
     starter: {
-      tagline: 'Un programa de fidelización digital de verdad por menos que dos cafés al mes.',
-      h1: 'Tarjetas de sellos y de puntos en Apple Wallet y Google Wallet',
-      h2: 'Escáner de QR incluido: cualquier móvil, tablet u ordenador',
-      h3: 'Un local y hasta 500 clientes',
-      h4: 'Tu logo y tus colores en cada tarjeta',
-      h5: 'Tarjetas que aparecen en la pantalla de bloqueo al pasar cerca',
+      tagline: 'Para un negocio pequeño listo para fidelizar de verdad.',
+      h1: 'Tarjetas de sellos, puntos y niveles en Apple Wallet y Google Wallet',
+      h2: 'Tu logo, tus colores, tu tarjeta: la diseñas tú',
+      h3: 'Escáner de QR incluido en cualquier móvil, tablet u ordenador',
+      h4: 'Cada visita, premio y nota en una sola ficha de cliente',
+      h5: 'Campañas, automatizaciones siempre activas y segmentos',
+      h6: 'La IA escribe tus campañas: 25 generaciones al mes incluidas',
     },
     growth: {
-      tagline: 'Haz que vuelvan a propósito, no por casualidad.',
-      h1: 'Todo lo de Starter y hasta 5.000 clientes',
-      h2: 'Hasta 5 locales con informes por sitio',
-      h3: 'Avisos en el wallet cuando pasan cerca de tu puerta',
-      h4: 'Campañas por correo, SMS y WhatsApp',
-      h5: 'Automatizaciones siempre activas: bienvenida, cumpleaños, reactivación',
-      h6: 'Segmentos de clientes y el constructor de reglas sin código',
+      tagline: 'Para un negocio en crecimiento listo para automatizar su retención.',
+      h1: 'Diez veces más clientes: hasta 5.000',
+      h2: 'Hasta 3 locales con informes por sitio',
+      h3: 'Geoperímetros que defines tú: la tarjeta vuelve cuando pasan cerca',
+      h4: 'Retención por cohortes, riesgo de fuga e ingresos por campaña',
+      h5: 'Vende tarjetas regalo desde tu propia página',
+      h6: '300 generaciones de IA y 15.000 mensajes al mes',
     },
     pro: {
-      tagline: 'El equipo de marketing con IA que no tienes que contratar.',
-      h1: 'Todo lo de Growth y hasta 25.000 clientes',
-      h2: 'Campañas, sugerencias y resúmenes de clientes con IA',
+      tagline: 'Para retención en varios locales, suscripciones y analítica profunda.',
+      h1: 'Hasta 20.000 clientes',
+      h2: 'Hasta 10 locales y 25 accesos para tu equipo',
       h3: 'Suscripciones de pago: tus propios ingresos recurrentes',
-      h4: 'Predicción de fuga, valor de vida y retención por cohortes',
-      h5: 'API REST, webhooks y marca personalizada',
-      h6: 'Hasta 15 locales',
-    },
-    business: {
-      tagline: 'Para grupos, franquicias y cualquier cosa con más de un encargado.',
-      h1: 'Clientes, locales y equipo ilimitados',
-      h2: 'Gestión de equipo con roles y personal por local',
-      h3: 'Red de socios: intercambia clientes con negocios cercanos',
-      h4: 'Inicio de sesión único y soporte prioritario',
-      h5: 'Campañas por cercanía y reglas ilimitadas',
-      h6: 'Nos encargamos nosotros de la migración',
+      h4: '50.000 mensajes al mes y 100 reglas de automatización',
+      h5: 'Red de socios: ofertas compartidas con negocios cercanos',
+      h6: 'Campañas ilimitadas, 1.500 generaciones de IA y soporte prioritario',
     },
   },
 
   pos: {
+    /* El título accesible del mostrador. Oculto visualmente: el visor necesita
+       el espacio vertical, pero la pantalla debe anunciarse. */
+    title: 'Punto de venta',
     dialogTitle: 'Escanear a un cliente',
     dialogDescription:
       'Apunta la cámara a la tarjeta wallet, la tarjeta de fidelización, el código de premio o la tarjeta regalo del cliente. También puedes buscarlo por nombre.',

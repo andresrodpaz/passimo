@@ -5,6 +5,7 @@ import { notFound, unprocessable } from '@/lib/errors'
 import { recordAudit } from '@/lib/audit'
 import { invalidateProgramConfig } from '@/lib/loyalty/engine'
 import { capabilityReport } from '@/lib/env'
+import { measureLimit } from '@/lib/billing/entitlements'
 
 export const runtime = 'nodejs'
 
@@ -48,6 +49,15 @@ export const GET = defineRoute(
       business: safe,
       locations: locations ?? [],
       team: team ?? [],
+      /*
+       * Ships with the roster so the settings screen can disable the invite
+       * form — and say why — before anyone types an address, rather than
+       * accepting an invitation and then refusing it at the seat cap.
+       */
+      seats: await measureLimit(business.businessId, 'team_members').then((status) => ({
+        used: status.used,
+        allowed: status.allowed,
+      })),
       role: business.role,
       permissions: [...business.permissions],
       capabilities: capabilityReport(),

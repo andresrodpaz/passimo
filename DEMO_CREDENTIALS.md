@@ -1,17 +1,24 @@
 # Passimo — demo accounts
 
-Sign-in credentials for the local and staging demo environment, one workspace per
-plan plus the two lifecycle states no paid plan can reach.
+Sign-in credentials for the local and staging demo environment: one workspace per
+purchasable plan, plus the two lifecycle states no paid plan can reach.
 
-**Every credential in this file was used to sign in against a production build on
-2026-09-02, and every workspace below was exercised end to end by
-`pnpm verify:functional` in the same run (939 checks, 0 failures).** Nothing here
-is documented but unverified.
+**Status of this file.** Every plan, price, cap and feature column below is
+generated from `lib/billing/plans.ts` — the same catalogue the API enforces — and
+the numbers in the per-account tables are what `pnpm db:reset && pnpm seed:demo`
+produces.
+
+The end-to-end sign-in sweep last ran on 2026-09-02 against the previous
+four-tier catalogue (939 checks, 0 failures). **The pricing v2 rebuild changed
+the plans, the caps and two of the five workspaces, so that run no longer covers
+this file.** Re-run `pnpm verify:functional` after seeding; the accounts,
+passwords and sign-in paths are unchanged, and the plan-dependent assertions are
+what needs re-confirming.
 
 ```bash
 pnpm db:up          # PostgreSQL 16 in Docker
-pnpm db:migrate     # 24 migrations
-pnpm seed:demo      # the six workspaces below
+pnpm db:migrate     # 25 migrations
+pnpm seed:demo      # the five workspaces below, plus the platform admin
 pnpm build && pnpm start
 ```
 
@@ -49,17 +56,26 @@ Sign in at `http://localhost:3000/login`.
 
 | Plan | Price | Business | Email | Dashboard |
 | --- | --- | --- | --- | --- |
-| Starter | $5/mo | Madrid Coffee (café, Madrid) | `starter@demo.com` | `/dashboard` |
-| Growth | $19/mo | Barcelona Barber (barber, Barcelona) | `growth@demo.com` | `/dashboard` |
-| Pro | $49/mo | Valencia Fitness (gym, Valencia) | `pro@demo.com` | `/dashboard` |
-| Business | $99/mo | Sevilla Bakery (bakery, Sevilla) | `business@demo.com` | `/dashboard` |
-| Trial (→ Pro) | $0 for 14 days | Bilbao Pizzeria (restaurant, Bilbao) | `trial@demo.com` | `/dashboard` |
+| Starter | $29/mo | Madrid Coffee (café, Madrid) | `starter@demo.com` | `/dashboard` |
+| Growth | $59/mo | Barcelona Barber (barber, Barcelona) | `growth@demo.com` | `/dashboard` |
+| Pro | $99/mo | Sevilla Bakery (bakery, Sevilla) | `pro@demo.com` | `/dashboard` |
+| Trial (→ Growth) | no charge for 14 days | Bilbao Pizzeria (restaurant, Bilbao) | `trial@demo.com` | `/dashboard` |
 | Lapsed | not for sale | Zaragoza Florist (florist, Zaragoza) | `lapsed@demo.com` | `/dashboard` |
 | Platform admin | — | all workspaces | `admin@passimo.demo` | `/admin` |
 
-There is **no free plan.** The catalogue holds exactly four purchasable tiers
-starting at $5; `trial` and `lapsed` are lifecycle states, not products, and
-`GET /api/v1/billing` never lists them as purchasable.
+There is **no free plan.** The catalogue holds exactly three purchasable tiers, at
+$29, $59 and $99. `trial` and `lapsed` are lifecycle states, not products:
+`GET /api/v1/billing` never lists them as purchasable, and neither appears on the
+pricing page.
+
+A **trial is not a free plan.** `trial@demo.com` is on `businesses.plan = 'trial'`
+with a future `trial_ends_at`, and `resolveEntitlements` gives it the full
+**Growth** feature set for fourteen days. When the date passes it becomes
+`lapsed`: reads keep working, writes answer 402, and nothing is deleted.
+
+> **`pro@demo.com` used to be `business@demo.com`.** Pricing v2 folded the fourth
+> $99 tier into Pro at the same price. The workspace kept its data, its four shops
+> and its 1,240 customers, and changed only its plan id and its login.
 
 > **About the counts below.** They are what a fresh `pnpm db:reset && pnpm seed:demo`
 > produces. Running `pnpm verify:functional` or `pnpm test:e2e` afterwards nudges a
@@ -71,7 +87,7 @@ starting at $5; `trial` and `lapsed` are lifecycle states, not products, and
 
 ---
 
-### Starter — $5/month · Madrid Coffee
+### Starter — $29/month · Madrid Coffee
 
 `starter@demo.com`
 
@@ -82,9 +98,9 @@ A one-site café on a stamp card: collect 8 stamps, get a free coffee.
 | Program | Coffee Club — **stamps**, goal 8 |
 | Customers | 140 (13 VIP, 96 opted into marketing) |
 | Locations | 1 (Calle Mayor, Madrid) |
-| Team | owner + 1 invited staff member (cap is 2) |
+| Team | owner + 2 invited members (cap is 3) |
 | Rewards | 6 active, 47 redemptions on record |
-| Campaigns | 5 drafts |
+| Campaigns | 5 (1 active, 2 completed, 1 scheduled, 1 draft) |
 | Referrals | 8 |
 
 **Test these**
@@ -99,22 +115,36 @@ A one-site café on a stamp card: collect 8 stamps, get a free coffee.
    logo, banner — and watch the preview change. It renders through the same
    resolver the pass builder uses.
 5. Open `/join/madrid-coffee` in a private window and enrol as a customer.
-6. **Try a Growth feature.** Campaigns, automations, gift cards, segments,
-   memberships and proximity all answer **402** naming the tier that includes
-   them. The sidebar shows them with a lock rather than hiding them.
+6. **The whole core product is here.** `/dashboard/campaigns` composes and
+   schedules; `/dashboard/automations` has welcome, birthday and win-back running;
+   `/dashboard/customers` builds and counts segments; the AI writes campaign copy
+   (503 without `ANTHROPIC_API_KEY`, which is a credential answer, not a plan
+   one). This is the point of the $29 tier: a café can actually run on it.
+7. **Try a Growth feature.** Gift cards, multi-location, geofencing, proximity
+   campaigns, automation rules and advanced analytics answer **402** naming the
+   tier that includes them. Memberships and the partner network answer 402 naming
+   Pro. The sidebar shows them with a lock rather than hiding them.
+8. **Try to exceed a cap through the API, not the UI.**
+   `POST /api/v1/locations` for a second site answers 402 with
+   `suggested_plan: "growth"` regardless of what the client sends. So does a CSV
+   import of more than 500 rows.
 
 **Limitations**
 
-- 500 customers, 1 location, 2 team members.
-- No campaigns, automations, segments, gift cards, memberships, AI, geofencing,
-  proximity campaigns, automation rules, API access or webhooks.
+- 500 customers, 1 location, 3 team members, 10 campaign sends a month, 2,000
+  messages a month, 25 AI generations a month.
+- No gift cards, multi-location, geofencing, proximity campaigns, automation
+  rules, advanced analytics, memberships or partner network.
 - Wallet *proximity* is included; **geofencing is not**, so the demo's
   `wallet_settings` row has geofencing off — deliberately, so the demo never
   shows a Starter merchant using something the API refuses.
+- The billing screen reads "Not on this plan" for proximity campaigns and
+  automation rules rather than showing a 0 / 0 meter, and names Growth and its
+  price beside each.
 
 ---
 
-### Growth — $19/month · Barcelona Barber
+### Growth — $59/month · Barcelona Barber
 
 `growth@demo.com`
 
@@ -127,7 +157,7 @@ Three sites on a 10-cut card, with campaigns and geofenced wallet notifications.
 | Locations | 3 (Gràcia, El Born, Eixample) — all geocoded, all geofenced |
 | Team | owner + manager + staff + viewer |
 | Rewards | 6 active, 92 redemptions |
-| Campaigns | 6 · Proximity campaigns 2 · Automation rules 3 |
+| Campaigns | 5 · Proximity campaigns 2 · Automation rules 3 |
 | Wallet passes | 84 installed |
 | Referrals | 31 |
 
@@ -145,93 +175,80 @@ Three sites on a 10-cut card, with campaigns and geofenced wallet notifications.
 5. `/dashboard/locations` — three real Barcelona addresses with working geofence
    radii; change one and see the wallet rules follow.
 6. `/dashboard/wallet` → Automation rules — the no-code IF/THEN builder.
-7. **Try a Pro feature.** Memberships and AI answer 402 naming Pro.
+7. `/dashboard/analytics` — cohort retention, churn risk, CLV and campaign
+   attribution, all of which Starter does not have.
+8. **Try a Pro feature.** Memberships and the partner network answer 402 naming
+   Pro.
+9. **This is the plan the trial runs on**, so it is also the account that shows a
+   trialling merchant exactly what they are evaluating.
 
 **Limitations**
 
-- 5,000 customers, 5 locations, 10 team members, 10 proximity campaigns, 10
+- 5,000 customers, 3 locations, 10 team members, 50 campaign sends a month,
+  15,000 messages a month, 300 AI generations a month, 15 proximity campaigns, 20
   automation rules.
-- No AI, memberships, advanced analytics, API access, webhooks, coalition, SSO or
-  team management.
+- No memberships, partner network or priority support.
 
 ---
 
-### Pro — $49/month · Valencia Fitness
+### Pro — $99/month · Sevilla Bakery
 
 `pro@demo.com`
 
-A three-site gym on a points program, with memberships and the AI surfaces.
-
-| | |
-| --- | --- |
-| Program | Training Points — **points**, goal 500, 1 point per €1 |
-| Customers | 860 (51 VIP, 550 opted into marketing) |
-| Locations | 3 (Ruzafa, Benimaclet, Port) |
-| Team | owner + admin + 2 managers + staff + viewer |
-| Rewards | 7 active, 207 redemptions |
-| Campaigns | 6 · Proximity 3 · Automation rules 4 |
-| Wallet passes | 46 installed |
-| Referrals | 61 |
-
-**Test these**
-
-1. Everything from Growth, plus:
-2. A **points** program rather than stamps. Record a €42.50 purchase at the
-   counter and 42 points are credited — the earning rule is per-currency, not a
-   flat 1 per visit. (This was flat-1 until this pass, which made a 500-point goal
-   need 500 visits.)
-3. `/dashboard/memberships` — paid membership plans with an earn multiplier.
-4. `/dashboard/insights` — AI insights. Every AI route answers **503
-   `not_configured`** without `ANTHROPIC_API_KEY`, and only for a plan that
-   *includes* AI: Starter and Growth get 402 first.
-5. `/dashboard/analytics` — cohort retention, CLV, churn, repeat rate, attributed
-   revenue.
-6. API access and webhooks in `/dashboard/settings`.
-
-**Limitations**
-
-- 25,000 customers, 15 locations, 25 team members, 2,000 AI actions/month.
-- No coalition (partner network), SSO, priority support or team management.
-- AI returns 503 until `ANTHROPIC_API_KEY` is set.
-
----
-
-### Business — $99/month · Sevilla Bakery
-
-`business@demo.com`
-
-Four sites, unlimited everything, the full feature set.
+Four shops on a points program, with paid memberships, the partner network and
+the AI surfaces. The largest dataset in the demo, and the right account for
+judging whether the analytics screens hold up.
 
 | | |
 | --- | --- |
 | Program | Bakery Rewards — **points**, goal 200, 1 point per €1 |
 | Customers | 1,240 (71 VIP, 788 opted into marketing) |
-| Locations | 4 (Triana, Centro, Nervión, Los Remedios) |
-| Team | owner + admin + 3 managers + 2 staff + viewer |
+| Locations | 4 (Triana, Centro, Nervión, Los Remedios) — of a 10 cap |
+| Team | owner + admin + 2 managers + staff + viewer (cap is 25) |
 | Rewards | 7 active, 164 redemptions |
-| Campaigns | 6 · Proximity 3 · Automation rules 4 |
+| Campaigns | 5 · Proximity 3 · Automation rules 4 |
+| Memberships | 2 plans (Daily Bread €24.90/mo, Coffee Club €12.50/mo), 74 members |
 | Wallet passes | 50 installed |
 | Referrals | 79 |
 
 **Test these**
 
-1. Everything from Pro, plus:
-2. `/dashboard/network` — the partner network (coalition offers).
-3. Team management with roles across four sites — managers scoped to a location.
-4. Unlimited customers, locations, team members, messages and AI actions: the
-   billing screen shows `∞` for every cap.
-5. The largest dataset in the demo — the right account for judging whether the
-   analytics screens hold up.
+1. Everything from Growth, plus:
+2. A **points** program rather than stamps. Record a €12.50 purchase at the
+   counter and 12 points are credited — the earning rule is per-currency, not a
+   flat 1 per visit. (This was flat-1 until an earlier pass, which made a
+   200-point goal need 200 visits.)
+3. `/dashboard/memberships` — two paid plans with earn multipliers and 74 members
+   across `active`, `past_due` and `cancelled`. `stripe_price_id` is null because
+   this deployment has no Stripe, which is the honest state rather than a fake
+   subscription.
+4. `/dashboard/network` — the partner network. **Empty in the demo, deliberately:**
+   a coalition needs two entitled businesses, and Pro is the only tier that has
+   the feature, so there is nobody for Sevilla Bakery to partner with. The screen
+   renders, the API accepts an offer, and there is no seeded relationship to look
+   at. Documented rather than fabricated.
+5. `/dashboard/insights` — AI insights. Every AI route answers **503
+   `not_configured`** without `ANTHROPIC_API_KEY`. The order is verified:
+   anonymous gets 401, an over-quota merchant gets 402, and only an entitled
+   merchant on an unconfigured deployment sees 503.
+6. Four shops with managers scoped per location — the multi-site RBAC case.
 
 **Limitations**
 
-- None from the plan. What is unavailable is unavailable to everybody: wallet
-  passes need Apple/Google credentials, messaging needs Resend, checkout needs
-  Stripe. All three report their own absence.
+- 20,000 customers, 10 locations, 25 team members, 50,000 messages a month, 1,500
+  AI generations a month, 50 proximity campaigns, 100 automation rules. Campaign
+  sends are unlimited.
+- **Not unlimited, on purpose.** The tier this replaced advertised `∞` on every
+  cap; unlimited inference and unlimited SMS on a $99 subscription is how a SaaS
+  acquires a customer it loses money on every month. The numbers above are large
+  enough that no small chain reaches them and small enough that the margin holds.
+- What is unavailable is unavailable to everybody: wallet passes need Apple/Google
+  credentials, messaging needs Resend, checkout needs Stripe, AI needs Anthropic.
+  All four report their own absence rather than pretending.
 
 ---
 
-### Trial — 14 days of Pro · Bilbao Pizzeria
+### Trial — 14 days of Growth · Bilbao Pizzeria
 
 `trial@demo.com`
 
@@ -240,22 +257,32 @@ trial banner and countdown.
 
 | | |
 | --- | --- |
-| Stored plan | `trial` · effective plan **`pro`** · 9 days remaining |
+| Stored plan | `trial` · effective plan **`growth`** · 9 days remaining |
 | Program | Pizza Points — **points**, goal 150 |
 | Customers | 45 · Rewards 6 · Redemptions 31 · Passes 18 |
 
 **Test these**
 
-1. The trial banner: days remaining and a route to checkout.
-2. Pro features work — AI, memberships, advanced analytics. A trial is entitled to
-   Pro on purpose: the features a merchant falls in love with should be the ones
-   worth paying for.
-3. `GET /api/v1/billing` reports `stored_plan: "trial"`, `plan: "lapsed"` (the
-   billed-tier fallback) and `effective_plan: "pro"`. Read `effective_plan` for
+1. The trial banner: days remaining, the plan being trialled by name, and a route
+   to checkout. It says "you are on Growth", not "everything unlocked" — because
+   the trial is Growth, and telling a merchant otherwise means they discover on
+   day three that memberships were never included.
+2. Growth features work — geofencing, gift cards, multi-location, advanced
+   analytics. Memberships and the partner network answer 402 naming Pro, during
+   the trial as well as after it.
+3. **Trials are Growth rather than Pro on purpose,** and it is a commercial
+   decision as much as a cost one. Growth is the plan we most want merchants to
+   buy, so the fourteen days are spent inside the product actually being sold and
+   the day-15 question is "keep this?" rather than "which of three things was I
+   using?". A merchant who trials Pro learns to depend on memberships, then meets
+   a $99 invoice for a café that needed $29 of software. Financially, a trial has
+   no card on file, and Growth's 300 AI generations and 15,000 messages cannot be
+   scripted into a bill.
+4. `GET /api/v1/billing` reports `stored_plan: "trial"`, `plan: "lapsed"` (the
+   billed-tier fallback) and `effective_plan: "growth"`. Read `effective_plan` for
    gating and `stored_plan` to tell "trialling" from "trial ended".
-4. `/admin` → Businesses — the row reads **Pro** with a **trial** badge, not
-   "Inactive". (It read "Inactive" until this pass, which counted every live trial
-   as churn.)
+5. `/admin` → Businesses — the row reads **Growth** with a **trial** badge, not
+   "Inactive", and MRR excludes it because there is no invoice behind it.
 
 ---
 
@@ -283,7 +310,9 @@ exercise the paywall.
 3. **A POS scan still works.** An existing customer standing at the counter gets
    their stamp. Losing a merchant's customers over a failed card is worse than
    losing the subscription.
-4. `/dashboard/billing` shows the reactivation wall and the $5 entry price.
+4. `/dashboard/billing` shows the reactivation wall and the $29 entry price. The
+   wall says what is still there before it asks for money, which is the only order
+   in which that sentence is true.
 5. The billing screen shows `customers 60 / 0`. That is the state, not a bug: the
    cap of 0 is what refuses a *write*.
 
@@ -296,8 +325,10 @@ Cross-tenant read access. `/admin`.
 **Test these**
 
 1. Platform overview — MRR, plan breakdown, workspaces, customers, scans, wallet
-   passes. MRR excludes trials.
-2. Businesses tab — all six workspaces, each on the tier it is actually using.
+   passes. MRR excludes trials, because a trial has no invoice behind it, and
+   yearly subscribers contribute their annual price over twelve rather than the
+   monthly list rate. With the demo seed it reads $187/month: $29 + $59 + $99.
+2. Businesses tab — all five workspaces, each on the tier it is actually using.
 3. Impersonate a merchant; the impersonation is written to an audit trail
    (`admin_impersonations`) visible under the Impersonation log tab.
 4. Change a plan and watch the merchant's own audit log record that support did it.
@@ -306,57 +337,96 @@ Cross-tenant read access. `/admin`.
 
 ---
 
-## Feature matrix (verified, not documented)
+## Feature matrix
 
-Read from `lib/billing/plans.ts` and confirmed against the running API for every
-plan. ✅ = the API accepted it. 402 = refused with `payment_required` naming the
-tier that includes it.
+Read from `lib/billing/plans.ts`, the same catalogue the API enforces. 402 =
+refused with `payment_required`, naming the tier that includes it.
 
-| Capability | Starter $5 | Growth $19 | Pro $49 | Business $99 | Trial | Lapsed |
-| --- | :--: | :--: | :--: | :--: | :--: | :--: |
-| Dashboard, customers, CRM (read) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Add / edit customers | ✅ | ✅ | ✅ | ✅ | ✅ | 402 |
-| Loyalty program, rewards, redemption | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ scan only |
-| QR scanner + manual fallback | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Wallet card designer | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Custom branding | ✅ | ✅ | ✅ | ✅ | ✅ | 402 |
-| Wallet proximity | ✅ | ✅ | ✅ | ✅ | ✅ | 402 |
-| Basic analytics | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Campaigns | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Automations | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Segments | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Gift cards | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Multi-location | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Geofencing | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Proximity campaigns | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Automation rules (no-code) | 402 | ✅ | ✅ | ✅ | ✅ | 402 |
-| Memberships | 402 | 402 | ✅ | ✅ | ✅ | 402 |
-| AI | 402 | 402 | 503¹ | 503¹ | 503¹ | 402 |
-| Advanced analytics | 402 | 402 | ✅ | ✅ | ✅ | 402 |
-| API access + webhooks | 402 | 402 | ✅ | ✅ | ✅ | 402 |
-| Partner network (coalition) | 402 | 402 | 402 | ✅ | 402 | 402 |
-| SSO | 402 | 402 | 402 | ✅ | 402 | 402 |
-| Team management | 402 | 402 | 402 | ✅ | 402 | 402 |
-| Priority support | 402 | 402 | 402 | ✅ | 402 | 402 |
+**This table has not been re-probed against a running API since pricing v2.** The
+previous four-tier version was; `pnpm verify:functional` is what re-confirms it.
+Every ✅ and 402 below follows from the catalogue, so a discrepancy would mean a
+gate is missing rather than that this table is wrong — which is exactly what the
+re-run is looking for.
 
-¹ **503, and only for a plan that includes AI.** The route is fully implemented;
-it reports `not_configured` because this deployment has no `ANTHROPIC_API_KEY`.
-The order matters and is verified: an anonymous caller gets 401, an unentitled
-plan gets 402 naming the tier, and only an entitled merchant on an unconfigured
-deployment sees 503.
+| Capability | Starter $29 | Growth $59 | Pro $99 | Trial | Lapsed |
+| --- | :--: | :--: | :--: | :--: | :--: |
+| Dashboard, customers, CRM (read) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Add / edit customers | ✅ | ✅ | ✅ | ✅ | 402 |
+| Loyalty program, rewards, redemption | ✅ | ✅ | ✅ | ✅ | ✅ scan only |
+| QR scanner + manual fallback | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Wallet card designer | ✅ | ✅ | ✅ | ✅ | ✅ read |
+| Brand kit — logo, colours, copy | ✅ | ✅ | ✅ | ✅ | 402 write |
+| Wallet proximity (pass surfaces nearby) | ✅ | ✅ | ✅ | ✅ | 402 |
+| Basic analytics | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Campaigns | ✅ | ✅ | ✅ | ✅ | 402 |
+| Automations (welcome / birthday / win-back) | ✅ | ✅ | ✅ | ✅ | 402 |
+| Segments | ✅ | ✅ | ✅ | ✅ | 402 |
+| AI campaign copy, insights, segments | 503¹ | 503¹ | 503¹ | 503¹ | 402 |
+| Gift cards | 402 | ✅ | ✅ | ✅ | 402 |
+| Multi-location | 402 | ✅ | ✅ | ✅ | 402 |
+| Geofencing (merchant-defined) | 402 | ✅ | ✅ | ✅ | 402 |
+| Proximity campaigns | 402 | ✅ | ✅ | ✅ | 402 |
+| Automation rules (no-code) | 402 | ✅ | ✅ | ✅ | 402 |
+| Advanced analytics — cohorts, churn, CLV | 402 | ✅ | ✅ | ✅ | 402 |
+| Daily automatic AI insights | — | ✅² | ✅² | ✅² | — |
+| Memberships | 402 | 402 | ✅ | 402 | 402 |
+| Partner network (coalition) | 402 | 402 | ✅³ | 402 | 402 |
+| Priority support | — | — | ✅⁴ | — | — |
+
+¹ **503, not 402.** AI is on every purchasable tier — the plans differ by
+allowance (25 / 300 / 1,500 generations a month), not by access. The route is
+fully implemented and reports `not_configured` because this deployment has no
+`ANTHROPIC_API_KEY`. A merchant who has spent their monthly allowance gets 402
+naming the tier with more.
+
+² Gated on `advanced_analytics`, so Growth and above. The daily sweep also spends
+one AI generation from the monthly allowance, which is why Starter's 25 belong to
+the merchant's own campaign copy rather than to a background job.
+
+³ Renders and accepts an offer, but the demo has no seeded partnership: a
+coalition needs two entitled businesses and Pro is the only tier with the
+feature.
+
+⁴ An operational commitment (named contact, same-business-day first response),
+not a code path. It carries an entitlement flag so it can appear on the pricing
+card and in support tooling; nothing in the API checks it, and nothing should.
+
+### Removed in pricing v2
+
+Four features were advertised on the old top tier and implemented nowhere — no
+route checked them and no screen unlocked behind them:
+
+| Was sold as | Reality | Now |
+| --- | --- | --- |
+| Single sign-on | No implementation | Removed from the catalogue |
+| REST API access | No implementation | Removed from the catalogue |
+| Webhooks (outbound) | `lib/webhooks/deliver.ts` exists; nothing exposes it to a merchant | Removed from the catalogue |
+| Team management | No invite endpoint, no team screen | Removed; seats are governed by the `team_members` cap, which every plan has |
+
+They are gone rather than renamed. A merchant could have paid $99 for four things
+that were never going to arrive.
 
 ### Limits
 
-| Limit | Starter | Growth | Pro | Business | Trial | Lapsed |
-| --- | --: | --: | --: | --: | --: | --: |
-| Customers | 500 | 5,000 | 25,000 | ∞ | 25,000 | 0 |
-| Locations | 1 | 5 | 15 | ∞ | 15 | 1 |
-| Team members | 2 | 10 | 25 | ∞ | 25 | 1 |
-| Messages / month | 500 | 10,000 | 50,000 | ∞ | 50,000 | 0 |
-| AI actions / month | 0 | 0 | 2,000 | ∞ | 2,000 | 0 |
-| Campaigns / month | 0 | ∞ | ∞ | ∞ | ∞ | 0 |
-| Proximity campaigns | 0 | 10 | 50 | ∞ | 50 | 0 |
-| Automation rules | 0 | 10 | 50 | ∞ | 50 | 0 |
+| Limit | Starter | Growth | Pro | Trial | Lapsed |
+| --- | --: | --: | --: | --: | --: |
+| Customers | 500 | 5,000 | 20,000 | 5,000 | 0 |
+| Locations | 1 | 3 | 10 | 3 | 1 |
+| Team members | 3 | 10 | 25 | 10 | 1 |
+| Messages / month | 2,000 | 15,000 | 50,000 | 15,000 | 0 |
+| AI generations / month | 25 | 300 | 1,500 | 300 | 0 |
+| Campaign sends / month | 10 | 50 | ∞ | 50 | 0 |
+| Proximity campaigns (active) | 0 | 15 | 50 | 15 | 0 |
+| Automation rules (active) | 0 | 20 | 100 | 20 | 0 |
+
+A cap of **0** means the plan does not include the feature at all, not that the
+allowance is spent. The two are different sentences and the billing screen says
+the right one: "Not on this plan — Growth includes 15, $59/month".
+
+Every workspace in the demo sits comfortably inside its own caps. That is
+deliberate: a demo account already over its limit teaches a reviewer that the
+limits do not hold. `lapsed` is the exception, and it is the state working
+correctly — its caps are zero because zero is what refuses a *write*.
 
 ---
 

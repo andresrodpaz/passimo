@@ -56,7 +56,9 @@ means your role cannot do this, `402` means your plan cannot.
 | [`STORE_EXPERIENCE.md`](STORE_EXPERIENCE.md) | The counter scanner, browser support, offline behaviour, the loyalty transaction |
 | [`WALLET_PROXIMITY.md`](WALLET_PROXIMITY.md) | Apple and Google passes, geofencing, proximity campaigns, the no-code rule engine, privacy |
 | [`BRAND_AND_CARD_DESIGN.md`](BRAND_AND_CARD_DESIGN.md) | **Where the card designer lives and how a merchant finds it**, the Brand Kit, the contrast guarantee, templates, the Apple/Google previews, and what a merchant still cannot set |
-| [`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md) | The plan catalogue ($5 floor, no free tier), feature gates, limits, trial and lapse behaviour |
+| [`PRICING.md`](PRICING.md) | **What we charge and why**: $29 / $59 / $99, what Starter has to be, why somebody upgrades, unit economics, and what was removed |
+| [`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md) | The plan catalogue (three tiers, no free tier), feature gates, limits, hard vs soft, trial, downgrade and lapse behaviour |
+| [`BILLING.md`](BILLING.md) | Stripe, checkout, the portal, the webhook and its idempotency, failed payments and dunning |
 | [`INTERNATIONALIZATION.md`](INTERNATIONALIZATION.md) | How "never mix languages" is enforced by the type system rather than intended |
 | [`API.md`](API.md) | REST reference, authentication, webhooks, error envelope |
 | [`DEMO_ENVIRONMENT.md`](DEMO_ENVIRONMENT.md) | `pnpm seed:demo`, the accounts it creates, what each demonstrates |

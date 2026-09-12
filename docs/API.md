@@ -231,15 +231,47 @@ Manual correction. Requires `loyalty:adjust`. Always audited.
 
 | Method | Path | Permission |
 | --- | --- | --- |
-| `GET` | `/customers?businessId=&q=&segmentId=&sort=&limit=&offset=` | `customers:read` |
+| `GET` | `/customers?businessId=&q=&segmentId=&tag=&vip=&rfm=&sort=&limit=&offset=` | `customers:read` |
 | `POST` | `/customers` | `customers:write` |
 | `GET` | `/customers/{id}?businessId=` | `customers:read` |
 | `PATCH` | `/customers/{id}` | `customers:write` |
 | `DELETE` | `/customers/{id}?businessId=` | `customers:delete` (anonymises) |
 | `GET` | `/customers/lookup?businessId=&q=` | `customers:read` |
+| `GET` | `/customers/tags?businessId=` | `customers:read` — the business's tag vocabulary |
 | `POST` | `/customers/{id}/notes` | `customers:write` |
 | `POST` | `/customers/import` | `customers:import` |
 | `GET` | `/customers/export?format=csv\|json` | `customers:export` |
+
+**Casing.** The list and the detail both answer in `camelCase` (`isVip`,
+`visitCount`, `churnRisk`, `primaryBalance`) — one mapper, `mapCustomer`, builds
+both, so they cannot drift. Query *parameters* are `camelCase` too (`businessId`,
+`segmentId`); only raw SQL columns are `snake_case`, and those do not reach the
+wire.
+
+### Tags
+
+```
+PATCH /customers/{id}   { businessId, tags: ["wholesale", "no nuts"] }
+GET   /customers/tags?businessId=
+GET   /customers?businessId=&tag=wholesale
+```
+
+`tags` on the update **replaces** the customer's set. Omitting the field leaves
+tags alone; `[]` removes them all. The distinction matters because an
+append-only endpoint cannot express removal, which is how a tag editor becomes a
+tag adder.
+
+Tags are a **case-insensitive identity, case-preserving in display**: writing
+"Wholesale" against a stored "wholesale" reuses the existing tag rather than
+creating a second one, and the `?tag=` filter and the "Tag is one of" segment
+condition both fold case to match. `tags` is unique on `(business_id, name)` and
+PostgreSQL compares that case-sensitively, so the folding is done in
+`lib/customers/tags.ts` rather than left to the constraint.
+
+Until 2026-09-05 tags could be written **only** at enrolment or through a CSV
+column — the profile rendered read-only badges, `?tag=` had no way to be set from
+the UI, and the segment condition could never match anything a merchant had
+chosen. All three now share one write path.
 
 `/customers/lookup` is the type-ahead behind the counter scanner. It classifies
 its input exactly as `POST /scan` does — so a pasted card URL or signed token

@@ -115,6 +115,50 @@ describe('compileSegment — comparison operators', () => {
     expect(compiled.sql).not.toContain('champion')
   })
 
+  /**
+   * `= any()` has two forms and only one of them works here.
+   *
+   * This assertion exists because the test above passed against SQL that
+   * PostgreSQL refused to run. `x = any(y)` is the *array* form when `y` is an
+   * array expression and the *subquery* form when `y` is a parenthesised
+   * SELECT — the choice is syntactic. The compiler used to emit
+   * `any((select array_agg(v) …))`, which is the subquery form applied to one
+   * row of type `text[]`, so the planner answered:
+   *
+   *     operator does not exist: text = text[]
+   *
+   * Nothing surfaced, because `countSegment` logged the failure and returned 0.
+   * Every "is one of" condition therefore reported *no matching customers*: the
+   * built-in VIP segment read 0 against 50 VIPs, and a merchant filtering by
+   * language or tag saw an empty table and believed it.
+   *
+   * So the shape is pinned, on every operator that builds a list.
+   */
+  it('uses the array-constructor form of any(), not the subquery form', () => {
+    const listOperators: Array<{ field: 'rfm_segment' | 'tag'; operator: 'in' | 'not_in' }> = [
+      { field: 'rfm_segment', operator: 'in' },
+      { field: 'rfm_segment', operator: 'not_in' },
+      { field: 'tag', operator: 'in' },
+      { field: 'tag', operator: 'not_in' },
+    ]
+
+    for (const { field, operator } of listOperators) {
+      const compiled = compileSegment({
+        match: 'all',
+        conditions: [{ field, operator, value: ['champion', 'loyal'] }],
+      })
+
+      expect(compiled.sql, `${field} ${operator} builds an array constructor`).toContain(
+        'array(select v from jsonb_array_elements_text('
+      )
+      // The exact text that failed. `(select array_agg(…))` inside any()/all()
+      // is the subquery form and does not type-check against a scalar column.
+      expect(compiled.sql, `${field} ${operator} must not use a scalar subquery`).not.toContain(
+        'select coalesce(array_agg('
+      )
+    }
+  })
+
   it('treats a null column as satisfying not_in', () => {
     const compiled = compileSegment({
       match: 'all',

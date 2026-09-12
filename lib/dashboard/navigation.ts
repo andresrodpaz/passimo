@@ -115,7 +115,7 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
    * customer holds and the thing merchants most want to make theirs, so a
    * merchant scanning this list for where to change it should hit the word
    * without reading anything else. It carries no `feature`: card design is
-   * included on every purchasable plan from Starter (€5/month) up, and gating
+   * included on every purchasable plan from Starter ($29/month) up, and gating
    * the signature feature of the product behind an upgrade would be a different
    * and worse bug than hiding it.
    */

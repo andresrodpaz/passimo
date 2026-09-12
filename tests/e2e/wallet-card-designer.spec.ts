@@ -77,21 +77,58 @@ test.describe('the designer has an address of its own', () => {
 // The journey, which needs a real merchant
 // -----------------------------------------------------------------------------
 
-async function signUpMerchant(request: APIRequestContext): Promise<boolean> {
+/**
+ * Signs up, and reports *why* if it could not.
+ *
+ * The reason matters more than the boolean. This used to return `response.ok()`
+ * and every test in the file skipped with "no database: signup is unavailable
+ * on this deployment" — a sentence that is only sometimes true. When the whole
+ * suite runs back to back, the eight-per-five-minutes auth limit is often
+ * already spent by another spec, so twelve tests would quietly not run while
+ * announcing a database problem that did not exist. A skip that misreports its
+ * own cause is worse than a failure: it reads as "not applicable" and nobody
+ * looks again.
+ *
+ * So a 429 skips and says so, a connection failure skips and says so, and
+ * anything else — a 422, a 500, a schema change that broke signup — fails,
+ * because those are the product being broken.
+ */
+async function signUpMerchant(
+  request: APIRequestContext
+): Promise<{ ok: true } | { ok: false; skip: string } | { ok: false; fail: string }> {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`
 
-  const response = await request.post('/api/v1/auth/signup', {
-    data: {
-      email: `e2e-card-${stamp}@passimo.test`,
-      password: 'a-perfectly-fine-passphrase-2026',
-      businessName: `E2E Card Café ${stamp}`,
-      category: 'cafe',
-      timezone: 'Europe/Madrid',
-      locale: 'en',
-    },
-  })
+  let response
+  try {
+    response = await request.post('/api/v1/auth/signup', {
+      data: {
+        email: `e2e-card-${stamp}@passimo.test`,
+        password: 'a-perfectly-fine-passphrase-2026',
+        businessName: `E2E Card Café ${stamp}`,
+        category: 'cafe',
+        timezone: 'Europe/Madrid',
+        locale: 'en',
+        acceptedTerms: true,
+      },
+    })
+  } catch (cause) {
+    return { ok: false, skip: `signup was unreachable: ${(cause as Error).message}` }
+  }
 
-  return response.ok()
+  if (response.ok()) return { ok: true }
+  if (response.status() === 429) {
+    return {
+      ok: false,
+      skip: 'our own auth rate limit (8 per 5 minutes per IP) is spent — run this file on its own',
+    }
+  }
+  if (response.status() === 503) {
+    return { ok: false, skip: 'signup is unavailable on this deployment' }
+  }
+  return {
+    ok: false,
+    fail: `signup failed with ${response.status()}: ${await response.text()}`,
+  }
 }
 
 /*
@@ -118,16 +155,28 @@ async function useSession(page: Page, cookies: Cookies): Promise<void> {
 test.describe('a merchant finding their card', () => {
   let session: Cookies | null = null
 
+  let skipReason: string | null = null
+
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext()
     // Signup establishes the session itself, so this is the file's only call to
     // a rate-limited auth endpoint.
-    if (await signUpMerchant(context.request)) session = await context.cookies()
+    const result = await signUpMerchant(context.request)
+    if (result.ok) {
+      session = await context.cookies()
+    } else if ('fail' in result) {
+      await context.close()
+      // Not a skip. Signup answering 422 or 500 is the product being broken,
+      // and this file finding out first is useful.
+      throw new Error(result.fail)
+    } else {
+      skipReason = result.skip
+    }
     await context.close()
   })
 
   test('the sidebar says the word "card"', async ({ page, isMobile }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto('/dashboard')
 
@@ -141,7 +190,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('the dashboard shows the card and offers to change it', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto('/dashboard')
 
@@ -154,7 +203,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('the page says what it is for, in the merchant’s words', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto(DESIGNER)
 
@@ -163,7 +212,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('both wallet previews are offered, and labelled as previews', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto(DESIGNER)
 
@@ -176,7 +225,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('a template changes the card, and the change survives a reload', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto(DESIGNER)
 
@@ -203,7 +252,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('the editor is usable on a phone', async ({ page, isMobile }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     test.skip(!isMobile, 'this is the mobile projection of the same screen')
     await useSession(page, session!)
     await page.goto(DESIGNER)
@@ -233,7 +282,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('the checklist row leads to the editor', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto('/dashboard')
 
@@ -243,7 +292,7 @@ test.describe('a merchant finding their card', () => {
   })
 
   test('the checklist does not tick anything this merchant has not done', async ({ page }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
     await page.goto('/dashboard')
 
@@ -256,7 +305,21 @@ test.describe('a merchant finding their card', () => {
      * to stop reading it.
      */
     const checklist = page.getByRole('region').filter({ hasText: 'First steps' }).first()
-    await expect(checklist.getByText('0 of 6 done')).toBeVisible()
+
+    /*
+     * Asserted as "zero of *something*" rather than "0 of 6".
+     *
+     * The literal 6 was a hidden dependency on the plan catalogue: the visible
+     * item count is whatever the merchant's tier can reach, so it moved when the
+     * trial changed tier and when the team row stopped being gated on a feature
+     * that did not exist. Neither of those is a regression in what this test is
+     * about, which is that a merchant who has done nothing sees nothing ticked.
+     */
+    await expect(checklist.getByText(/^0 of \d+ done$/)).toBeVisible()
+    const total = Number(
+      (await checklist.getByText(/^0 of \d+ done$/).innerText()).match(/of (\d+)/)?.[1] ?? '0'
+    )
+    expect(total, 'the checklist should never render empty').toBeGreaterThan(0)
   })
 
   test('the whole screen is in the merchant’s language, with nothing left over', async ({
@@ -264,7 +327,7 @@ test.describe('a merchant finding their card', () => {
     context,
     baseURL,
   }) => {
-    test.skip(!session, 'no database: signup is unavailable on this deployment')
+    test.skip(!session, skipReason ?? 'no session')
     await useSession(page, session!)
 
     // Overwrites the 'en' cookie the beforeEach pins.

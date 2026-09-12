@@ -4,7 +4,6 @@ import * as React from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
-  ArrowUpRight,
   Check,
   CreditCard,
   Loader2,
@@ -19,7 +18,16 @@ import { useApi, apiPost, query } from '@/lib/client/api'
 import { useWorkspace } from '@/lib/client/workspace'
 import { AsyncBoundary } from '@/components/states'
 import { Meter } from '@/components/metrics'
-import { LIMIT_LABEL_KEYS, PLAN_CURRENCY, type LimitKey, type PlanId } from '@/lib/billing/plans'
+import {
+  LIMIT_LABEL_KEYS,
+  PLAN_CURRENCY,
+  PLANS,
+  lowestPlanWithLimit,
+  planRank,
+  type LimitKey,
+  type Plan,
+  type PlanId,
+} from '@/lib/billing/plans'
 import { toastError } from '@/lib/client/api-errors'
 import { useI18n } from '@/lib/i18n'
 import type { TranslationKey } from '@/lib/i18n'
@@ -180,7 +188,9 @@ function BillingScreen() {
               </p>
             </section>
 
-            <UsageCard usage={data.usage} />
+            <UsageCard usage={data.usage} plan={data.effective_plan} />
+
+            <PlanChangeCard data={data} />
 
             <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -212,7 +222,9 @@ function BillingScreen() {
                 </p>
               )}
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {/* Three tiers, three columns. No `xl` breakpoint needed — the
+                  catalogue no longer has a fourth card to wrap. */}
+              <div className="grid items-start gap-4 md:grid-cols-3">
                 {data.catalogue.map((plan) => (
                   <PlanCard
                     key={plan.id}
@@ -221,7 +233,6 @@ function BillingScreen() {
                     current={plan.id === data.effective_plan}
                     canManage={can('billing:manage')}
                     busy={busy === plan.id}
-                    salesEmail={data.sales_email}
                     onChoose={() => void choosePlan(plan.id)}
                   />
                 ))}
@@ -277,7 +288,7 @@ function CurrentPlanCard({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {data.trial.active
-              ? t('billing.trialBody')
+              ? t('billing.trialBody', { plan: PLANS[data.effective_plan].name })
               : data.subscription.cancelAtPeriodEnd
                 ? t('billing.cancellingBody')
                 : data.subscription.delinquent
@@ -315,51 +326,229 @@ function CurrentPlanCard({
   )
 }
 
-function UsageCard({ usage }: { usage: UsageRow[] }) {
-  const { t, formatNumber } = useI18n()
-  const metered = usage.filter((row) => row.allowed !== null)
-
-  if (metered.length === 0) {
-    return (
-      <section className="rounded-xl border bg-card p-5">
-        <h3 className="text-base font-semibold">{t('billing.usage')}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{t('billing.usageUnlimited')}</p>
-      </section>
-    )
-  }
+/**
+ * Live usage against every cap.
+ *
+ * Two things this screen has to do that a bar chart alone does not. Every row is
+ * shown, unlimited ones included, so a merchant can see the whole shape of what
+ * they bought rather than only the parts that happen to be countable. And a row
+ * that is close to or over its cap names its own remedy inline: what they have
+ * used, what the next plan allows, and what that plan costs — the three facts
+ * that turn "you are at your limit" from a scolding into a decision.
+ */
+function UsageCard({ usage, plan }: { usage: UsageRow[]; plan: PlanId }) {
+  const { t } = useI18n()
 
   return (
     <section className="rounded-xl border bg-card p-5">
       <h3 className="text-base font-semibold">{t('billing.usage')}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{t('billing.usageBody')}</p>
       <dl className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {metered.map((row) => (
-          <div key={row.key}>
-            <dt className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{t(LIMIT_LABEL_KEYS[row.key])}</span>
-              <span
-                className={cn(
-                  'tabular-nums font-medium',
-                  row.exceeded
-                    ? 'text-destructive'
-                    : row.approaching
-                      ? 'text-amber-600 dark:text-amber-500'
-                      : ''
-                )}
-              >
-                {formatNumber(row.used)} / {formatNumber(row.allowed ?? 0)}
-              </span>
-            </dt>
-            <dd className="mt-1.5">
-              <Meter
-                value={Math.min(row.used, row.allowed ?? row.used)}
-                max={row.allowed ?? 1}
-                tone={row.exceeded || row.approaching ? 'warning' : 'default'}
-              />
-            </dd>
-          </div>
+        {usage.map((row) => (
+          <UsageMeter key={row.key} row={row} plan={plan} />
         ))}
       </dl>
+    </section>
+  )
+}
+
+function UsageMeter({ row, plan }: { row: UsageRow; plan: PlanId }) {
+  const { t, formatCurrency, formatNumber } = useI18n()
+
+  const label = t(LIMIT_LABEL_KEYS[row.key])
+
+  if (row.allowed === null) {
+    return (
+      <div>
+        <dt className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{label}</span>
+          <span className="font-medium tabular-nums">{formatNumber(row.used)}</span>
+        </dt>
+        <dd className="mt-1.5 text-xs text-muted-foreground">
+          {t('billing.usageUnlimitedRow')}
+        </dd>
+      </div>
+    )
+  }
+
+  /*
+   * `lowestPlanWithLimit` is the same resolver the 402 refusal uses, so the
+   * remedy on this screen and the remedy in the API error are always the same
+   * plan. Filtered to a genuine upgrade: on the largest plan it would otherwise
+   * return the plan the merchant is already on and offer them their own tier.
+   */
+  const remedy = lowestPlanWithLimit(row.key, row.used + 1)
+  const upgrade: Plan | null =
+    remedy && planRank(remedy.id) > planRank(plan) ? remedy : null
+
+  const nextAllowance = (candidate: Plan): string =>
+    candidate.limits[row.key] === null
+      ? t('billing.usageUnlimitedRow')
+      : formatNumber(candidate.limits[row.key] as number)
+
+  /*
+   * A cap of zero is not "you have used it all" — it is a resource this plan does
+   * not include, and the honest row says so and names what does include it.
+   * Rendering a 0 / 0 progress bar instead was the specific contradiction that
+   * showed a Starter merchant an empty "Proximity campaigns" meter beside a
+   * screen answering "available from Growth".
+   */
+  if (row.allowed === 0) {
+    return (
+      <div>
+        <dt className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">{label}</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t('billing.usageNotIncluded')}
+          </span>
+        </dt>
+        <dd className="mt-1.5 text-xs text-muted-foreground">
+          {upgrade
+            ? t('billing.usageNextPlan', {
+                plan: upgrade.name,
+                allowed: nextAllowance(upgrade),
+                price: formatCurrency(upgrade.monthlyPrice ?? 0, { currency: PLAN_CURRENCY }),
+              })
+            : t('billing.usageTopPlan')}
+        </dd>
+      </div>
+    )
+  }
+
+  const pressured = row.exceeded || row.approaching
+
+  return (
+    <div>
+      <dt className="flex items-center justify-between gap-2 text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span
+          className={cn(
+            'font-medium tabular-nums',
+            row.exceeded
+              ? 'text-destructive'
+              : row.approaching
+                ? 'text-amber-600 dark:text-amber-500'
+                : ''
+          )}
+        >
+          {formatNumber(row.used)} / {formatNumber(row.allowed)}
+        </span>
+      </dt>
+      <dd className="mt-1.5">
+        <Meter
+          value={Math.min(row.used, row.allowed)}
+          max={row.allowed > 0 ? row.allowed : 1}
+          tone={pressured ? 'warning' : 'default'}
+        />
+        {pressured && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {row.exceeded
+              ? t('billing.usageAtLimit', {
+                  allowed: formatNumber(row.allowed),
+                  plan: PLANS[plan].name,
+                })
+              : t('billing.usageApproaching', { plan: PLANS[plan].name })}{' '}
+            {upgrade ? (
+              <span className="font-medium text-foreground">
+                {t('billing.usageNextPlan', {
+                  plan: upgrade.name,
+                  allowed: nextAllowance(upgrade),
+                  price: formatCurrency(upgrade.monthlyPrice ?? 0, { currency: PLAN_CURRENCY }),
+                })}
+              </span>
+            ) : (
+              t('billing.usageTopPlan')
+            )}
+          </p>
+        )}
+      </dd>
+    </div>
+  )
+}
+
+/**
+ * What a plan change does, said before the merchant clicks.
+ *
+ * A downgrade is the moment a merchant is most afraid of this product, and the
+ * fear is specific: *will I lose my customers?* The answer is no — reads are
+ * never gated and nothing is deleted — but that only reassures someone who is
+ * told it. So this lists, from live usage, exactly which of their existing rows
+ * would sit above a smaller plan's cap, and states plainly that being over a cap
+ * makes a resource read-only rather than gone.
+ *
+ * It renders only for a workspace that actually has something to lose, so a café
+ * with one location and 40 customers never reads a paragraph about conflicts
+ * that cannot happen to them.
+ */
+function PlanChangeCard({ data }: { data: BillingResponse }) {
+  const { t, formatDate, formatNumber } = useI18n()
+
+  const currentRank = planRank(data.effective_plan)
+  const smaller = data.catalogue.filter((plan) => planRank(plan.id) < currentRank)
+  if (smaller.length === 0) return null
+
+  const nextDown = smaller[smaller.length - 1]!
+  const definition = PLANS[nextDown.id]
+
+  const conflicts = data.usage.flatMap((row) => {
+    const allowed = definition.limits[row.key]
+    if (allowed === null || row.used <= allowed) return []
+    return [{ key: row.key, used: row.used, allowed }]
+  })
+
+  const renewal = data.subscription.currentPeriodEnd
+    ? formatDate(data.subscription.currentPeriodEnd, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null
+
+  return (
+    <section className="grid gap-4 rounded-xl border bg-card p-5 md:grid-cols-2">
+      <div>
+        <h3 className="text-base font-semibold">{t('billing.downgradeTitle')}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{t('billing.downgradeBody')}</p>
+
+        {conflicts.length > 0 ? (
+          <>
+            <p className="mt-3 text-sm font-medium">
+              {t('billing.downgradeConflicts', { plan: nextDown.name })}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {conflicts.map((conflict) => (
+                <li key={conflict.key} className="text-sm text-muted-foreground">
+                  {t('billing.downgradeConflictRow', {
+                    limit: t(LIMIT_LABEL_KEYS[conflict.key]),
+                    used: formatNumber(conflict.used),
+                    plan: nextDown.name,
+                    allowed: formatNumber(conflict.allowed),
+                  })}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t('billing.downgradeReassurance')}
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {t('billing.downgradeNoConflicts', { plan: nextDown.name })}
+          </p>
+        )}
+      </div>
+
+      <div className="md:border-l md:pl-5">
+        <h3 className="text-base font-semibold">{t('billing.cancelTitle')}</h3>
+        <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+          <li>{renewal ? t('billing.cancelAccess', { date: renewal }) : t('billing.cancelAccessNoDate')}</li>
+          <li>{t('billing.cancelData')}</li>
+          <li>{t('billing.cancelWallet')}</li>
+          <li>{t('billing.cancelDashboard')}</li>
+          <li>{t('billing.cancelReactivate')}</li>
+        </ul>
+        <p className="mt-2 text-xs text-muted-foreground">{t('billing.cancelHow')}</p>
+      </div>
     </section>
   )
 }
@@ -370,7 +559,6 @@ function PlanCard({
   current,
   canManage,
   busy,
-  salesEmail,
   onChoose,
 }: {
   plan: CataloguePlan
@@ -378,12 +566,10 @@ function PlanCard({
   current: boolean
   canManage: boolean
   busy: boolean
-  salesEmail: string | null
   onChoose: () => void
 }) {
   const { t, formatCurrency } = useI18n()
   const price = interval === 'year' ? plan.annual_price : plan.monthly_price
-  const custom = price === null
 
   return (
     <article
@@ -408,19 +594,20 @@ function PlanCard({
       <h4 className="text-base font-semibold">{plan.name}</h4>
       <p className="mt-0.5 min-h-10 text-sm text-muted-foreground">{t(plan.tagline_key)}</p>
 
+      {/*
+       * No "Custom / talk to us" branch any more. Every purchasable tier in the
+       * three-plan catalogue has a real number, and a price of `null` is only
+       * ever `lapsed`, which never reaches this component — the API filters the
+       * catalogue to purchasable tiers. A branch for a state that cannot occur is
+       * a branch nobody ever sees fail.
+       */}
       <p className="mt-4 flex items-baseline gap-1">
-        {custom ? (
-          <span className="text-2xl font-semibold tracking-tight">{t('billing.custom')}</span>
-        ) : (
-          <>
-            <span className="text-3xl font-semibold tracking-tight tabular-nums">
-              {formatCurrency(price, { currency: PLAN_CURRENCY })}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {interval === 'year' ? t('common.perYear') : t('common.perMonth')}
-            </span>
-          </>
-        )}
+        <span className="text-3xl font-semibold tracking-tight tabular-nums">
+          {formatCurrency(price ?? 0, { currency: PLAN_CURRENCY })}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          {interval === 'year' ? t('common.perYear') : t('common.perMonth')}
+        </span>
       </p>
       {interval === 'year' && plan.annual_saving > 0 && (
         <p className="text-xs text-emerald-600 dark:text-emerald-500">
@@ -444,22 +631,6 @@ function PlanCard({
           <Button variant="outline" className="w-full" disabled>
             {t('billing.currentPlan')}
           </Button>
-        ) : custom && salesEmail ? (
-          <Button asChild variant="outline" className="w-full gap-2">
-            <a href={`mailto:${salesEmail}?subject=${encodeURIComponent(plan.name)}`}>
-              {t('billing.talkToUs')}
-              <ArrowUpRight className="size-4" />
-            </a>
-          </Button>
-        ) : custom ? (
-          /*
-           * No mailbox configured, so there is nothing to link to. Saying so is
-           * better than a dead `mailto:` — the merchant would compose a message,
-           * send it, and never learn it went nowhere.
-           */
-          <Button variant="outline" className="w-full" disabled>
-            {t('billing.contactUnavailable')}
-          </Button>
         ) : plan.purchasable && canManage ? (
           <Button className="w-full gap-2" disabled={busy} onClick={onChoose}>
             {busy && <Loader2 className="size-4 animate-spin" />}
@@ -467,7 +638,7 @@ function PlanCard({
           </Button>
         ) : (
           <Button variant="outline" className="w-full" disabled>
-            {plan.monthly_price === 0 ? t('billing.included') : t('billing.unavailable')}
+            {t('billing.unavailable')}
           </Button>
         )}
       </div>

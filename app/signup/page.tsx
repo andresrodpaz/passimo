@@ -7,6 +7,7 @@ import { Loader2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -58,6 +59,7 @@ function SignupForm() {
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+  const [acceptedTerms, setAcceptedTerms] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   const strength = passwordStrength(password, t)
@@ -83,6 +85,15 @@ function SignupForm() {
       setError(t('auth.signup.passwordTooSimple'))
       return
     }
+    /*
+     * Last, because it sits last on the form and the errors above are read in
+     * field order. The server rejects an unaccepted signup regardless — this
+     * only spares the merchant a round trip to be told so.
+     */
+    if (!acceptedTerms) {
+      setError(t('auth.signup.needsTerms'))
+      return
+    }
 
     setBusy(true)
     setError(null)
@@ -95,8 +106,17 @@ function SignupForm() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         locale: navigator.language.startsWith('es') ? 'es' : 'en',
         referralCode: params.get('ref') ?? undefined,
+        acceptedTerms,
       })
-      window.location.assign('/onboarding')
+      /*
+       * Normally onboarding. A `next` is honoured so an invited colleague who
+       * has no account yet can come from /team/accept, create one, and be
+       * returned to the invitation instead of losing it — without that, the
+       * accept page's "create an account" button was a dead end that dropped
+       * the token. Same-origin paths only, so `next` cannot become an open
+       * redirector.
+       */
+      window.location.assign(safeNext(params.get('next')))
     } catch (cause) {
       setError(
         cause instanceof ApiError
@@ -215,6 +235,48 @@ function SignupForm() {
             </div>
           </div>
 
+          {/*
+            * The terms bind the merchant to payment, to their own duties as
+            * data controller and to how the agreement ends, so they have to be
+            * on screen at the moment the account is created — a footer link on
+            * another page is not presentation. Both documents open in a new tab
+            * so reading them does not discard a half-filled form.
+            */}
+          <div className="flex items-start gap-2.5 pt-1">
+            <Checkbox
+              id="accept-terms"
+              checked={acceptedTerms}
+              onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+              className="mt-0.5"
+              aria-describedby="accept-terms-label"
+            />
+            <Label
+              htmlFor="accept-terms"
+              id="accept-terms-label"
+              className="text-xs font-normal leading-relaxed text-muted-foreground"
+            >
+              {t('auth.signup.terms.before')}{' '}
+              <Link
+                href="/legal/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                {t('auth.signup.terms.terms')}
+              </Link>{' '}
+              {t('auth.signup.terms.and')}{' '}
+              <Link
+                href="/legal/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                {t('auth.signup.terms.privacy')}
+              </Link>
+              {t('auth.signup.terms.after')}
+            </Label>
+          </div>
+
           <Button type="submit" className="h-11 w-full gap-2" disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {busy ? t('auth.signup.submitting') : t('auth.signup.submit')}
@@ -242,6 +304,13 @@ function SignupForm() {
       </div>
     </main>
   )
+}
+
+/** Accepts only a same-origin absolute path, so `next` cannot become a redirector. */
+function safeNext(value: string | null): string {
+  if (!value) return '/onboarding'
+  if (!value.startsWith('/') || value.startsWith('//')) return '/onboarding'
+  return value
 }
 
 /**

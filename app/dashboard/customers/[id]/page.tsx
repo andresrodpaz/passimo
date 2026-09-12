@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { useApi, apiPost, apiPatch, apiFetch, query } from '@/lib/client/api'
 import { useWorkspace } from '@/lib/client/workspace'
+import { TagEditor } from '@/components/customers/tag-editor'
 import { AsyncBoundary } from '@/components/states'
 import { Meter, useFormatValue } from '@/components/metrics'
 import { toastError } from '@/lib/client/api-errors'
@@ -32,6 +33,8 @@ import type { CustomerListItem } from '@/lib/customers/service'
 
 type Profile = {
   customer: CustomerListItem
+  /** Tags this business already uses, offered as one-tap additions. */
+  tagSuggestions?: string[]
   activity: Array<{
     id: string
     type: string
@@ -264,15 +267,20 @@ function Header({
         )}
       </div>
 
-      {customer.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {customer.tags.map((tag) => (
-            <Badge key={tag.id} variant="secondary" style={{ borderColor: tag.color }}>
-              {tag.name}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {/*
+        Editable, not just displayed. These were read-only badges, and tags had
+        no write path after enrolment — so the `?tag=` list filter and the
+        "Tag is one of" segment condition could never match anything a merchant
+        had chosen.
+      */}
+      <TagEditor
+        businessId={businessId}
+        customerId={customer.id}
+        tags={customer.tags}
+        suggestions={profile.tagSuggestions ?? []}
+        editable={can('customers:write')}
+        onChange={onChange}
+      />
     </section>
   )
 }

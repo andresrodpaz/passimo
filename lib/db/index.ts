@@ -45,6 +45,54 @@ export function getDb(): Database {
   return db
 }
 
+/**
+ * Reads a list of ids out of an RPC result, whatever shape PostgreSQL chose.
+ *
+ * This exists because of a bug that produced no error and no failing test, and
+ * quietly broke three revenue features at once.
+ *
+ * `passimo_segment_customer_ids` is declared `returns table (id uuid)`. A
+ * `returns table` with **one** column is not a composite type in the catalogue —
+ * PostgreSQL flattens it to `returns setof uuid` (`prorettype = uuid`,
+ * `typtype = 'b'`). `rpc()` is right to hand those back as bare values rather
+ * than one-key objects, and it does. But three call sites read the result as
+ * `rows.map((row) => row.id)`, which on an array of strings yields an array of
+ * `undefined` — and `.in('id', [undefined, …])` matches nothing.
+ *
+ * What that looked like in the product:
+ *
+ *   * **Customers → filter by segment** returned an empty list while the
+ *     segments screen, which counts through a different function, said 468.
+ *   * **A segment-targeted campaign** reported a reach of 468 and then sent to
+ *     nobody, because the fan-out resolves recipients through the ids function.
+ *   * **Birthday and anniversary automations** found no one, every day, for the
+ *     same reason.
+ *
+ * None of those raise. The count and the audience come from two different
+ * database functions, so the number a merchant sees stays right while the thing
+ * it describes is empty — which is why this is a helper rather than three fixed
+ * lines: the next single-column `returns table` will do it again.
+ *
+ * Accepts both shapes deliberately, so a caller cannot be wrong about which one
+ * a given function produces.
+ */
+export function idsFrom(data: unknown): string[] {
+  if (!Array.isArray(data)) return []
+
+  const ids: string[] = []
+  for (const row of data) {
+    if (typeof row === 'string') {
+      ids.push(row)
+      continue
+    }
+    if (row && typeof row === 'object') {
+      const value = (row as Record<string, unknown>).id
+      if (typeof value === 'string') ids.push(value)
+    }
+  }
+  return ids
+}
+
 export { QueryBuilder }
 export type { DatabaseError, Result }
 export { transaction, ping, closePool, getPool, query } from '@/lib/db/pool'

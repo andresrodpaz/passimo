@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { AsyncBoundary } from '@/components/states'
-import { LogoField } from '@/components/brand/logo-field'
+import { COVER_COPY, LogoField } from '@/components/brand/logo-field'
 import { CardPreview, type CardPreviewData } from '@/components/wallet/card-preview'
 import { PlatformSwitch } from '@/components/wallet/platform-switch'
 import { apiFetch, apiPatch, useApi, query } from '@/lib/client/api'
@@ -84,6 +84,7 @@ type Draft = {
   name: string
   description: string
   logoUrl: string | null
+  coverUrl: string | null
   primaryColor: string
   secondaryColor: string
   accentColor: string
@@ -105,6 +106,7 @@ function toDraft(brand: BrandKit): Draft {
     name: brand.name,
     description: brand.description ?? '',
     logoUrl: brand.logoUrl,
+    coverUrl: brand.coverUrl,
     primaryColor: brand.primaryColor,
     secondaryColor: brand.secondaryColor ?? '',
     accentColor: brand.accentColor,
@@ -224,6 +226,25 @@ function BrandKitForm({
     return result.logoUrl
   }
 
+  /**
+   * The share image.
+   *
+   * Same route, `kind=cover`, and the same baseline correction as the logo: the
+   * upload writes `cover_url` server-side, so `saved` has to move with it or the
+   * merchant is shown "unsaved changes" for an image that is already stored.
+   */
+  async function uploadCover(file: File): Promise<string> {
+    const form = new FormData()
+    form.append('file', file)
+    const result = await apiFetch<{ url: string }>(
+      `/api/v1/brand/logo${query({ businessId, kind: 'cover' })}`,
+      { method: 'POST', body: form }
+    )
+    setSaved((current) => ({ ...current, coverUrl: result.url }))
+    onSaved()
+    return result.url
+  }
+
   async function save() {
     setSaving(true)
     try {
@@ -232,6 +253,7 @@ function BrandKitForm({
         name: draft.name.trim(),
         description: draft.description.trim() || null,
         logoUrl: draft.logoUrl,
+        coverUrl: draft.coverUrl,
         primaryColor: normalizeHex(draft.primaryColor) ?? brand.primaryColor,
         secondaryColor: normalizeHex(draft.secondaryColor),
         accentColor: normalizeHex(draft.accentColor) ?? brand.accentColor,
@@ -294,6 +316,22 @@ function BrandKitForm({
               previewBackground={resolved.backgroundColor}
               onUpload={uploadLogo}
               onChange={(value) => set('logoUrl', value)}
+            />
+
+            {/*
+              The share image. Sits with the logo rather than in its own section
+              because a merchant thinks of both as "the pictures of my shop", and
+              the thing it controls — what their sign-up link looks like when
+              pasted into a chat — is identity, not settings.
+            */}
+            <LogoField
+              value={draft.coverUrl}
+              uploadsEnabled={uploadsEnabled}
+              disabled={!canWrite}
+              previewBackground={resolved.backgroundColor}
+              onUpload={uploadCover}
+              onChange={(value) => set('coverUrl', value)}
+              copy={COVER_COPY}
             />
           </div>
         </Section>

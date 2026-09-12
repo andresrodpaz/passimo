@@ -226,7 +226,7 @@ SQL is the thing that is wrong.**
 
 What it establishes:
 
-- Four purchasable tiers, entry price $5, **no free tier**.
+- Three purchasable tiers at $29 / $59 / $99, **no free tier**. `business` was folded into `pro` at the same $99 by migration `000024_pricing_v2.sql`.
 - No legacy `free` / `enterprise` values survive (migration 15 rewrote them).
 - `businesses.plan` holds only `trial`, `lapsed`, `starter`, `growth`, `pro`,
   `business`. Anything else is gated as lapsed by `resolveEntitlements`, which

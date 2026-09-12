@@ -179,9 +179,9 @@ export async function GET(
 
     // Re-issue through the signed-token endpoint so pass building lives in one
     // place. A short TTL is enough: the device follows the redirect immediately.
-    const { signToken } = await import('@/lib/crypto')
+    const { issueCardToken } = await import('@/lib/loyalty/card-token')
     const { env } = await import('@/lib/env')
-    const token = signToken('card', { c: serial }, 300)
+    const token = await issueCardToken(serial, 300)
     return Response.redirect(`${env.appUrl}/api/v1/wallet/apple/${token}`, 302)
   }
 

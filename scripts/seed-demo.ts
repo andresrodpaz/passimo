@@ -3,7 +3,8 @@
  *
  *   pnpm seed:demo
  *
- * Creates four merchant accounts — one per plan — a platform admin, and enough
+ * Creates five merchant accounts — one per purchasable plan, plus a live trial and a
+ * lapsed workspace — a platform admin, and enough
  * realistic data that every screen in the product has something on it: customers with
  * histories, transactions, visits, rewards, campaigns, wallet passes, geofence events,
  * notifications and analytics.
@@ -124,14 +125,14 @@ type DemoBusiness = {
   /**
    * The value written to `businesses.plan`.
    *
-   * `trial` and `lapsed` are included alongside the four purchasable tiers
+   * `trial` and `lapsed` are included alongside the three purchasable tiers
    * because they are the two states with their own UI that no purchasable tier can
    * reach: the trial countdown banner, and the reactivation wall that answers
    * every write with 402 while leaving reads intact. Without a workspace in each,
    * neither screen can be opened, and "does the paywall actually hold?" stays a
    * question the demo cannot answer.
    */
-  plan: 'starter' | 'growth' | 'pro' | 'business' | 'trial' | 'lapsed'
+  plan: 'starter' | 'growth' | 'pro' | 'trial' | 'lapsed'
   name: string
   slug: string
   category: string
@@ -186,9 +187,18 @@ type DemoBusiness = {
 }
 
 /**
- * Four businesses, one per plan, each in a different trade — so a reviewer opening
- * the demo sees the product working for a café, a barber, a gym and a bakery rather
- * than four copies of the same café.
+ * Three businesses, one per purchasable plan, each in a different trade and each
+ * sized like a real business on that plan — so a reviewer opening the demo sees
+ * the product working for a café, a barber and a bakery chain rather than three
+ * copies of the same café.
+ *
+ * The sizing is the point. Every one of them sits *inside* its plan's caps with
+ * room to spare, because a demo account that is already over its own limit teaches
+ * a reviewer that the limits do not hold:
+ *
+ *     Starter $29   Madrid Coffee       140 customers /  500    1 location  / 1
+ *     Growth  $59   Barcelona Barber    420          / 5,000    3 locations / 3
+ *     Pro     $99   Sevilla Bakery    1,240         / 20,000    4 locations / 10
  *
  * Coordinates are real city-centre locations. Proximity cannot be demonstrated with
  * invented coordinates: a geofence 50 m from `0, 0` is in the Atlantic.
@@ -286,65 +296,18 @@ const BUSINESSES: DemoBusiness[] = [
       { name: 'Beard trim', cost: 4, description: 'Tidy-up between cuts.' },
     ],
   },
+  /*
+   * Pro. Four shops and 1,240 customers — the "advanced retention and
+   * multi-location growth" case the tier is sold on, and comfortably inside Pro's
+   * caps of ten locations and twenty thousand customers.
+   *
+   * This workspace used to be `business@demo.com` on the fourth $99 tier. Pricing
+   * v2 folded that tier into Pro at the same price, so the account keeps its data
+   * and its shape and changes only its plan id and its login.
+   */
   {
     email: 'pro@demo.com',
     plan: 'pro',
-    name: 'Valencia Fitness',
-    slug: 'valencia-fitness',
-    category: 'gym',
-    city: 'Valencia',
-    template: 'gym',
-    primaryColor: '#0F766E',
-    textColor: '#ECFEFF',
-    program: {
-      name: 'Training Points',
-      type: 'points',
-      unitSingular: 'point',
-      unitPlural: 'points',
-      goal: 500,
-      reward: 'A free personal training session',
-    },
-    locations: [
-      {
-        name: 'Ruzafa',
-        address: 'Carrer de Cadis 44',
-        city: 'Valencia',
-        postalCode: '46006',
-        lat: 39.4592,
-        lng: -0.3712,
-        radius: 600,
-        primary: true,
-      },
-      {
-        name: 'Benimaclet',
-        address: 'Carrer de Bartomeu Bolívar 3',
-        city: 'Valencia',
-        postalCode: '46020',
-        lat: 39.4869,
-        lng: -0.3527,
-        radius: 600,
-      },
-      {
-        name: 'Port',
-        address: 'Carrer de Doctor Marcos Sopena 8',
-        city: 'Valencia',
-        postalCode: '46010',
-        lat: 39.4712,
-        lng: -0.3455,
-        radius: 800,
-      },
-    ],
-    ticket: { min: 35, max: 70 },
-    customerCount: 860,
-    rewards: [
-      { name: 'PT session', cost: 500, description: 'One hour with a trainer.' },
-      { name: 'Guest pass', cost: 200, description: 'Bring a friend for free.' },
-      { name: 'Protein shake', cost: 80, description: 'From the bar.' },
-    ],
-  },
-  {
-    email: 'business@demo.com',
-    plan: 'business',
     name: 'Sevilla Bakery',
     slug: 'sevilla-bakery',
     category: 'bakery',
@@ -411,12 +374,12 @@ const BUSINESSES: DemoBusiness[] = [
   /*
    * Two workspaces that are not on a purchasable tier.
    *
-   * These are not extra plans — `lib/billing/plans.ts` still has exactly four
-   * things for sale, starting at $5. They are the two *lifecycle states* whose
+   * These are not extra plans — `lib/billing/plans.ts` has exactly three things
+   * for sale, at $29, $59 and $99. They are the two *lifecycle states* whose
    * screens no paying workspace can reach, and which therefore could not be
    * opened at all in the demo:
    *
-   *   - **Trial.** Entitled to Pro, paying nothing, counting down. Exercises the
+   *   - **Trial.** Entitled to Growth, paying nothing, counting down. Exercises the
    *     trial banner, the days-remaining maths, and the checkout prompt. Also the
    *     state every real merchant is in on day one, which makes it the most
    *     important one to be able to look at.
@@ -694,19 +657,125 @@ async function removeTestResidue(admin: Admin): Promise<void> {
    * immutable ledger behind it.
    */
   let fixtures = 0
+  /*
+   * Two prefixes, not one. `zz-verify%` is what `scripts/verify-functional.mjs`
+   * names its probes; `MAT %` is what the merchant-acceptance pass named its
+   * own, and nothing swept those — so eight "MAT gate 1788512345846" membership
+   * plans had accumulated on three demo workspaces across eight runs. They were
+   * also actively harmful rather than merely untidy: this function is what makes
+   * `seedMemberships` idempotent, and its "any row already exists?" guard was
+   * reading those leftovers and skipping the real seed.
+   *
+   * `membership_plans` is in the table list for the same reason.
+   */
   for (const table of [
     'proximity_rules',
     'campaigns',
     'automations',
     'segments',
     'rewards',
+    'membership_plans',
   ]) {
-    const { count, error } = await admin
-      .from(table)
-      .delete({ count: 'exact' })
-      .like('name', 'zz-verify%')
-    if (error) problems.push(`${table} like zz-verify%: ${error.message}`)
-    else fixtures += count ?? 0
+    for (const prefix of ['zz-verify%', 'MAT %']) {
+      const { count, error } = await admin
+        .from(table)
+        .delete({ count: 'exact' })
+        .like('name', prefix)
+      if (error) problems.push(`${table} like ${prefix}: ${error.message}`)
+      else fixtures += count ?? 0
+    }
+  }
+
+  /*
+   * Demo workspaces this script no longer defines.
+   *
+   * Removing a business from `BUSINESSES` used to leave it in the database
+   * forever: the seed only ever upserts what it knows about. Pricing v2 dropped
+   * the fourth tier and with it one demo merchant, and re-seeding left the old
+   * workspace behind — remapped by migration 000024 to the same `pro` the new
+   * one is on, so the admin console showed *two* Pro accounts and the plan
+   * breakdown counted $198 of MRR from three subscriptions.
+   *
+   * Matched by slug against the definitions, and scoped to `@demo.com` owners so
+   * this can never reach a real workspace. Through `passimo_delete_business` for
+   * the usual reason: the ledger's immutability trigger refuses a bare cascade.
+   */
+  const wanted = new Set(BUSINESSES.map((definition) => definition.slug))
+  let orphans = 0
+  const { data: demoOwners } = await admin
+    .from('app_users')
+    .select('id')
+    .like('email', '%@demo.com')
+
+  for (const owner of demoOwners ?? []) {
+    const { data: owned } = await admin
+      .from('businesses')
+      .select('id, slug')
+      .eq('owner_id', owner.id as string)
+
+    for (const business of owned ?? []) {
+      if (wanted.has(business.slug as string)) continue
+      const { error } = await admin.rpc('passimo_delete_business', {
+        p_business_id: business.id as string,
+      })
+      if (error) problems.push(`retired demo workspace ${business.slug}: ${error.message}`)
+      else orphans += 1
+    }
+  }
+
+  /*
+   * And the accounts that owned them. A login that still works but reaches no
+   * workspace is worse than one that is gone: it is documented nowhere and fails
+   * at the dashboard rather than at the sign-in form.
+   *
+   * `reward_redemptions.redeemed_by` has to be released first. It references
+   * `app_users` with **no delete rule at all**, so an account that ever handed a
+   * reward over cannot be deleted while the row exists — and unlike the
+   * workspace-then-account order above, that does not help here: the workspace
+   * survived, because a slug the seed still defines was simply re-owned. This is
+   * exactly the failure the first attempt hit, with
+   * `reward_redemptions_redeemed_by_fkey` naming itself in the log.
+   *
+   * Nulling it rather than deleting the redemption: the redemption is real
+   * history and the column is nullable attribution. Losing "which member of staff
+   * handed this over" on a retired demo account is the cheapest possible thing to
+   * give up, and deleting the redemption instead would corrupt the reward counts
+   * on a workspace a reviewer is about to look at.
+   */
+  for (const owner of demoOwners ?? []) {
+    const { count } = await admin
+      .from('businesses')
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', owner.id as string)
+    if ((count ?? 0) > 0) continue
+
+    const { data: row } = await admin
+      .from('app_users')
+      .select('email')
+      .eq('id', owner.id as string)
+      .maybeSingle()
+    const email = (row?.email as string | undefined) ?? ''
+    // Only if no definition and no admin list claims this address. The demo
+    // owners themselves are re-provisioned below and must survive.
+    if (BUSINESSES.some((definition) => definition.email === email)) continue
+    if (ADMIN_EMAILS.includes(email)) continue
+
+    const { error: releaseError } = await admin
+      .from('reward_redemptions')
+      .update({ redeemed_by: null })
+      .eq('redeemed_by', owner.id as string)
+    if (releaseError) {
+      problems.push(`release redemptions for ${email}: ${releaseError.message}`)
+      continue
+    }
+
+    const { error } = await admin.from('app_users').delete().eq('id', owner.id as string)
+    if (error) problems.push(`retired demo account ${email}: ${error.message}`)
+    else accounts += 1
+  }
+
+  if (orphans > 0) {
+    console.log(`  · retired ${orphans} demo workspace(s) this seed no longer defines`)
   }
 
   if (workspaces > 0 || accounts > 0 || probes > 0 || fixtures > 0) {
@@ -828,7 +897,33 @@ async function seedBusiness(admin: Admin, definition: DemoBusiness): Promise<voi
   const customerIds = await seedCustomers(admin, businessId, programId, definition)
   await seedProximity(admin, businessId, definition, customerIds)
   await seedCampaigns(admin, businessId, definition)
+  await seedMemberships(admin, businessId, programId, definition, customerIds)
   await seedNotifications(admin, businessId)
+
+  /*
+   * The derived intelligence columns, last, with the same functions the daily
+   * job uses — and after every phase that can create a customer, so nobody is
+   * left with nulls.
+   *
+   * Without this the demo looked *broken rather than empty*. `rfm_segment`,
+   * `churn_risk` and `predicted_clv` are written only by `job.recompute_stats`,
+   * which runs on a schedule, so a freshly seeded database had them all null:
+   *
+   *   * the built-in "High churn risk" segment read 0 on every demo account;
+   *   * "VIP" is *is_vip OR RFM in (champion, loyal)*, so half of it never
+   *     contributed;
+   *   * every customer profile showed "—" for churn risk, RFM and predicted
+   *     value, which is most of what a CRM is for;
+   *   * sorting the customer list by churn did nothing at all.
+   *
+   * Running the real functions rather than writing plausible-looking numbers is
+   * what keeps the seed honest: these are the values the product itself would
+   * compute from this history.
+   */
+  await Promise.all([
+    admin.rpc('passimo_recompute_rfm', { p_business_id: businessId }),
+    admin.rpc('passimo_recompute_churn_risk', { p_business_id: businessId }),
+  ])
 
   console.log(`— ${customerIds.length} customers`)
 }
@@ -843,7 +938,7 @@ async function seedBusiness(admin: Admin, definition: DemoBusiness): Promise<voi
  * so no way to see what a `staff` role cannot do.
  *
  * The counts stay inside each plan's cap on purpose. A Starter workspace showing
- * five staff would be demonstrating a limit the API enforces at two, and a demo
+ * five staff would be demonstrating a limit the API enforces at three, and a demo
  * that contradicts the pricing page is worse than a thin one. Members are
  * `invited`, not `active`: an invite is a real state with its own UI, and
  * inventing signed-in staff accounts would mean four more passwords to document
@@ -857,8 +952,12 @@ async function seedTeam(
   const roster: Array<{ role: string; name: string }> = (() => {
     switch (definition.plan) {
       case 'starter':
-        // Cap is 2 including the owner, so exactly one colleague.
-        return [{ role: 'staff', name: 'Counter staff' }]
+        // Cap is 3 including the owner, so two colleagues — which is also what a
+        // one-site café actually has behind the counter.
+        return [
+          { role: 'manager', name: 'Shift manager' },
+          { role: 'staff', name: 'Counter staff' },
+        ]
       case 'growth':
         return [
           { role: 'manager', name: 'Shop manager' },
@@ -866,16 +965,17 @@ async function seedTeam(
           { role: 'viewer', name: 'Bookkeeper' },
         ]
       case 'pro':
+        // Cap is 25. Four shops, so a manager each plus head office.
         return [
           { role: 'admin', name: 'Operations lead' },
-          { role: 'manager', name: 'Ruzafa manager' },
-          { role: 'manager', name: 'Benimaclet manager' },
-          { role: 'staff', name: 'Front desk' },
+          { role: 'manager', name: 'Triana manager' },
+          { role: 'manager', name: 'Centro manager' },
+          { role: 'staff', name: 'Front counter' },
           { role: 'viewer', name: 'Accountant' },
         ]
       case 'trial':
         /*
-         * A trial is entitled to Pro, so the cap is 25 — but a nine-day-old
+         * A trial is entitled to Growth, so the cap is 10 — but a nine-day-old
          * restaurant with five managers is not a state any real workspace passes
          * through. One colleague is what a new merchant actually adds first.
          */
@@ -909,8 +1009,37 @@ async function seedTeam(
     .order('sort_order')
   const locationIds = (locations ?? []).map((row) => row.id as string)
 
+  const wanted = roster.map(
+    (member, index) => `${member.role}${index + 1}.${definition.slug}@demo.invalid`
+  )
+
+  /*
+   * Pending demo invites this roster no longer defines.
+   *
+   * The invite address encodes the member's *position* in the roster, so changing
+   * the roster orphans rows rather than updating them: raising Starter's cap from
+   * two seats to three moved the counter staff from position 1 to position 2, and
+   * a re-seed left `staff1.madrid-coffee@demo.invalid` behind beside the new
+   * `staff2` — two invites with the same display name on the same team screen, and
+   * a seat count that grew by one every time the roster changed.
+   *
+   * Scoped to `@demo.invalid`, an RFC 2606 reserved TLD, so this cannot reach an
+   * invite a real person was sent.
+   */
+  const { data: stale } = await admin
+    .from('team_members')
+    .select('id, invited_email')
+    .eq('business_id', businessId)
+    .eq('status', 'invited')
+    .like('invited_email', '%@demo.invalid')
+
+  for (const row of stale ?? []) {
+    if (wanted.includes(row.invited_email as string)) continue
+    await admin.from('team_members').delete().eq('id', row.id as string)
+  }
+
   for (const [index, member] of roster.entries()) {
-    const email = `${member.role}${index + 1}.${definition.slug}@demo.invalid`
+    const email = wanted[index]!
     const { data: existing } = await admin
       .from('team_members')
       .select('id')
@@ -1108,12 +1237,11 @@ async function seedProgram(
    * type, for the same reason.
    *
    * `passimo_provision_business` gives every workspace a stamps program earning
-   * one stamp per visit. This function then rewrites two of the four demo
-   * businesses to `points` with goals of 200 and 500 — and without this line the
-   * earning rule stayed at one per visit, so Sevilla Bakery credited **1 point
-   * for a €12.50 purchase** against a 200-point goal, and Valencia Fitness
-   * credited 1 against 500. The demo was showing a loyalty program nobody could
-   * complete, which is a worse advertisement than no demo at all.
+   * one stamp per visit. This function then rewrites the `points` businesses to
+   * earn per euro — and without this line the earning rule stayed at one per
+   * visit, so Sevilla Bakery credited **1 point for a €12.50 purchase** against a
+   * 200-point goal. The demo was showing a loyalty program nobody could complete,
+   * which is a worse advertisement than no demo at all.
    */
   await syncDefaultEarningRules(businessId, programId, definition.program.type)
 
@@ -1209,8 +1337,7 @@ async function seedCardDesign(
   const styleByPlan: Record<string, string> = {
     starter: 'solid',
     growth: 'duotone',
-    pro: 'gradient',
-    business: 'frosted',
+    pro: 'frosted',
     trial: 'gradient',
     lapsed: 'solid',
   }
@@ -1258,7 +1385,7 @@ async function seedWalletConfig(
        * would show those merchants using something the API refuses — a demo that
        * teaches the wrong thing about the plans is worse than a plain one.
        */
-      geofencing_enabled: ['growth', 'pro', 'business', 'trial'].includes(definition.plan),
+      geofencing_enabled: ['growth', 'pro', 'trial'].includes(definition.plan),
       apple_lock_screen_suggestions: true,
       google_wallet_suggestions: true,
       nearby_recommendations: true,
@@ -1499,7 +1626,7 @@ function rulesFor(definition: DemoBusiness) {
     },
   ]
 
-  if (definition.plan === 'business' || definition.plan === 'pro') {
+  if (definition.plan === 'pro') {
     rules.push({
       template_key: 'vip',
       name: 'VIP arrival',
@@ -2302,6 +2429,165 @@ async function seedCampaigns(
       clickRate: 0.25,
     }),
   ])
+}
+
+/**
+ * Paid memberships — Pro only, because `memberships` is a Pro feature.
+ *
+ * The reason this exists: `memberships` is one of the three things a merchant is
+ * asked to pay $99 rather than $59 for, and until now no demo account had a
+ * single row in `membership_plans`. A reviewer clicking Memberships on the Pro
+ * demo met an empty state, which is the worst possible answer to "what does the
+ * top tier actually give me" — worse than the screen being locked, because a lock
+ * at least implies something is behind it.
+ *
+ * Seeded directly rather than through `lib/commerce/memberships.ts` because that
+ * module creates Stripe prices, and a demo environment has no Stripe. The rows
+ * are therefore honest about what they are: `stripe_price_id` and
+ * `stripe_subscription_id` stay null, which is exactly the state a self-hosted
+ * deployment without billing is in, and the screens render it correctly.
+ */
+async function seedMemberships(
+  admin: Admin,
+  businessId: string,
+  programId: string,
+  definition: DemoBusiness,
+  customerIds: string[]
+): Promise<void> {
+  if (definition.plan !== 'pro' || customerIds.length === 0) return
+
+  const tiers = [
+    {
+      name: 'Daily Bread',
+      description: 'A loaf a day, and everything else earns double.',
+      price: 24.9,
+      interval: 'month',
+      included_balance: 60,
+      earn_multiplier: 2,
+      perks: [
+        { title: 'One loaf a day' },
+        { title: 'Double points on everything else' },
+        { title: 'Skip the morning queue' },
+      ],
+    },
+    {
+      name: 'Coffee Club',
+      description: 'Your morning coffee, prepaid.',
+      price: 12.5,
+      interval: 'month',
+      included_balance: 30,
+      earn_multiplier: 1.5,
+      perks: [{ title: 'One coffee a day' }, { title: '1.5× points' }],
+    },
+  ]
+
+  /*
+   * Idempotent by tier name rather than by "does this business have any
+   * membership plan at all?".
+   *
+   * The broad version was wrong in the way that matters: verification runs leave
+   * probe plans behind on the demo merchants, so the guard saw a `MAT gate …`
+   * row, concluded the seeding had already happened and skipped it — leaving the
+   * Pro demo with eight probe plans and none of its own. Matching the names this
+   * function writes means somebody else's rows cannot suppress it.
+   */
+  const { data: existing } = await admin
+    .from('membership_plans')
+    .select('id, name')
+    .eq('business_id', businessId)
+    .in(
+      'name',
+      tiers.map((tier) => tier.name)
+    )
+
+  const missing = tiers.filter(
+    (tier) => !(existing ?? []).some((row) => row.name === tier.name)
+  )
+
+  if (missing.length > 0) {
+    const { error } = await admin.from('membership_plans').insert(
+      missing.map((tier) => ({
+        business_id: businessId,
+        program_id: programId,
+        currency: 'EUR',
+        is_active: true,
+        ...tier,
+      }))
+    )
+    if (error) throw new Error(`membership_plans insert failed: ${error.message}`)
+  }
+
+  const { data: inserted } = await admin
+    .from('membership_plans')
+    .select('id, name')
+    .eq('business_id', businessId)
+    .in(
+      'name',
+      tiers.map((tier) => tier.name)
+    )
+
+  if (!inserted?.length) return
+
+  // Already populated on a previous run — the member rows are the expensive part
+  // and re-deriving them would double-count.
+  const { count: existingMembers } = await admin
+    .from('customer_memberships')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+  if ((existingMembers ?? 0) > 0) return
+
+  /*
+   * Members, spread across the statuses the screen has to render. `past_due` and
+   * `cancelled` are not decoration: a memberships screen that only ever shows
+   * healthy rows hides the two states a merchant most needs to be able to find.
+   *
+   * Deterministic slices of `customerIds`, so a re-seed produces the same members
+   * and a screenshot taken today still matches next week.
+   */
+  const rows: Array<Record<string, unknown>> = []
+  let cursor = 0
+
+  for (const [index, plan] of inserted.entries()) {
+    const size = index === 0 ? 48 : 26
+    const slice = customerIds.slice(cursor, cursor + size)
+    cursor += size
+
+    for (const [position, customerId] of slice.entries()) {
+      // Roughly 88% healthy, 6% failing, 6% cancelled — the shape of a real book
+      // of subscriptions rather than a uniform split.
+      const status =
+        position % 17 === 3 ? 'past_due' : position % 17 === 9 ? 'cancelled' : 'active'
+
+      rows.push({
+        business_id: businessId,
+        customer_id: customerId,
+        plan_id: plan.id,
+        status,
+        started_at: daysAgo(between(20, 300)),
+        current_period_end:
+          status === 'cancelled'
+            ? null
+            : new Date(Date.now() + between(1, 28) * 86_400_000).toISOString(),
+        cancelled_at: status === 'cancelled' ? daysAgo(between(2, 40)) : null,
+      })
+    }
+  }
+
+  await insertInBatches(admin, 'customer_memberships', rows)
+
+  // `member_count` is a denormalised column the list screen reads; leaving it at
+  // zero would show two plans with no members beside seventy-four member rows.
+  for (const plan of inserted) {
+    const { count: members } = await admin
+      .from('customer_memberships')
+      .select('id', { count: 'exact', head: true })
+      .eq('plan_id', plan.id)
+      .eq('status', 'active')
+    await admin
+      .from('membership_plans')
+      .update({ member_count: members ?? 0 })
+      .eq('id', plan.id)
+  }
 }
 
 async function seedPlatformAdmin(admin: Admin): Promise<void> {

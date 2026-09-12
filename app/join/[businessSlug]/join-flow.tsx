@@ -17,8 +17,9 @@ import type { PublicJoinData } from '@/lib/public/join'
 
 type JoinResult = {
   card_url: string
-  apple_wallet_url: string
-  google_wallet_url: string
+  /* Null when that provider has no credentials — see the join route. */
+  apple_wallet_url: string | null
+  google_wallet_url: string | null
   referral_code: string
 }
 
