@@ -23,6 +23,7 @@ import { Switch } from '@/components/ui/switch'
 import { useApi, apiPost, apiPatch, apiFetch, query } from '@/lib/client/api'
 import { useWorkspace } from '@/lib/client/workspace'
 import { TagEditor } from '@/components/customers/tag-editor'
+import { CardLinkPanel } from '@/components/customers/card-link-panel'
 import { AsyncBoundary } from '@/components/states'
 import { Meter, useFormatValue } from '@/components/metrics'
 import { toastError } from '@/lib/client/api-errors'
@@ -133,6 +134,11 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
 
             <div className="space-y-5">
               <LoyaltyPanel profile={profile} />
+              <CardLinkPanel
+                businessId={businessId!}
+                customerId={id}
+                editable={can('customers:write')}
+              />
               <MembershipPanel
                 profile={profile}
                 businessId={businessId!}

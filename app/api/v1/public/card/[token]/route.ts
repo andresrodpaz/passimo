@@ -51,10 +51,28 @@ export const GET = defineRoute(
         .eq('id', customer.business_id as string)
         .maybeSingle(),
       getCustomerLoyalty(customer.business_id as string, customer.id as string),
+      /*
+       * These three are scoped on `business_id` as well as the customer.
+       *
+       * A customer belongs to exactly one workspace, so filtering on the
+       * customer alone is *currently* sufficient — and that is an argument
+       * about today's data, not an isolation boundary. Nothing in the schema
+       * stops a `gift_cards` row owned by one business from naming another
+       * business's customer as its recipient: the foreign key proves the
+       * customer exists, not whose it is, and `db:verify` checks
+       * `reward_redemptions → customer` for exactly this class of drift but has
+       * no equivalent check for gift cards or memberships.
+       *
+       * The three most sensitive fields on this response — a gift-card balance,
+       * a gift-card code and a redemption code — are read by these queries, on
+       * a public endpoint authenticated only by a bearer URL. They carry the
+       * tenant filter, the same way every AI read does after the same reasoning.
+       */
       admin
         .from('reward_redemptions')
         .select('id, code, expires_at, rewards:reward_id (name, description)')
         .eq('customer_id', customer.id as string)
+        .eq('business_id', customer.business_id as string)
         .eq('status', 'claimed')
         .order('created_at', { ascending: false })
         .limit(5),
@@ -65,6 +83,7 @@ export const GET = defineRoute(
         .from('gift_cards')
         .select('code, remaining_value, currency, expires_at')
         .eq('recipient_customer_id', customer.id as string)
+        .eq('business_id', customer.business_id as string)
         .eq('status', 'active')
         .gt('remaining_value', 0)
         .order('created_at', { ascending: false })
@@ -73,6 +92,7 @@ export const GET = defineRoute(
         .from('customer_memberships')
         .select('current_period_end, membership_plans(name, perks, earn_multiplier)')
         .eq('customer_id', customer.id as string)
+        .eq('business_id', customer.business_id as string)
         .eq('status', 'active')
         .limit(3),
     ])

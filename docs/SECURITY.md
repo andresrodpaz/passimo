@@ -99,8 +99,28 @@ email renderer, which escapes every interpolated value. CSP sets
 bearer token or a `SameSite=Lax` session cookie; simple cross-origin form posts
 cannot reach them.
 
-**Authorisation.** Enforced twice: `defineRoute` permissions at the API layer,
-RLS at the database layer.
+**Authorisation.** Enforced at the API layer by `defineRoute`: it resolves the
+workspace, verifies the caller's membership, and checks permissions before a
+handler runs, so a handler's `business.businessId` is proven rather than
+supplied. Tenant-sensitive SQL functions re-check the pair they are given —
+`passimo_ensure_account` and `passimo_rotate_card_token` both refuse arguments
+that cross a tenant boundary.
+
+> This previously read "…and RLS at the database layer". That is not true and
+> has not been since migration `000018`, which removed thirty-odd policies **on
+> purpose**: they were written for an architecture where a browser queries
+> Postgres directly, and a table owner bypasses its own policies unless they are
+> forced, which none were. Isolation is real and it is in the application layer.
+> `db:verify` checks it independently (`cross_tenant_relationship_violations`).
+
+**Customer card links.** `/card/{token}` is a bearer capability URL —
+HMAC-SHA256, purpose-scoped, 365-day TTL, claims `{c, v, exp}` and no PII. The
+card behind it carries gift-card balances and codes, so possession is access.
+`customers.card_token_version` makes a link revocable: merchants rotate it from
+the customer page (`customers:write`), which invalidates every link issued so
+far without touching the membership. **An already-installed wallet pass keeps
+working** — it authenticates with a separate `wallet_auth_token`. Full threat
+model and payload inventory in `docs/CUSTOMER_JOIN_FLOW.md`.
 
 **Secrets.** Never in client bundles (`server-only` guards). API keys are stored
 as SHA-256 hashes; the plaintext is shown once. Integration credentials live in

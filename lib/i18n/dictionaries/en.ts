@@ -2231,6 +2231,23 @@ export const en = {
       summaryEmpty: 'Not enough history yet.',
       summaryFailed: 'We could not generate a summary right now.',
       loyalty: 'Loyalty',
+      /*
+       * The rotation copy names what survives as precisely as what stops. A
+       * merchant reading "the card is revoked" would reasonably conclude the
+       * wallet pass is dead too, and it is not — it authenticates with a
+       * different token and repairs its own link on the next sync.
+       */
+      cardLink: 'Card link',
+      cardLinkBody:
+        'The private link to this customer’s card. Anyone with it can open the card, so treat it like a key.',
+      cardLinkShow: 'Show card link',
+      cardLinkRotate: 'Replace card link',
+      cardLinkRotateConfirm:
+        'The current link stops working straight away and this customer will need the new one. Their stamps, rewards and gift cards are not affected, and a wallet pass they already installed keeps working.',
+      cardLinkRotated: 'Done — the old link no longer opens this card. Share the new one below.',
+      cardLinkFailed: 'We could not load the card link. Please try again.',
+      cardLinkRotateFailed: 'We could not replace the card link. Please try again.',
+      cardQrAlt: 'QR code for this customer’s card',
       rewards: 'Rewards',
       rewardFallback: 'Reward',
       membership: 'Membership',

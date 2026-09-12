@@ -197,6 +197,61 @@ read. `passimo_rotate_card_token(business_id, customer_id)` increments it, which
 kills every link previously issued for that customer while the membership,
 balance, history and wallet registration stay exactly where they are.
 
+**Merchant-facing.** Customer → *Card link* panel (`components/customers/card-link-panel.tsx`),
+behind `GET`/`POST /api/v1/customers/{id}/card-link`.
+
+| Concern | How |
+|---|---|
+| Who can see the link | `customers:read` |
+| Who can rotate | `customers:write` (staff and above) — it is recoverable; erasure stays at admin |
+| Tenant safety | `defineRoute`'s `businessIdFrom` proves membership, the route re-checks the customer belongs to that workspace, and the SQL function checks the pair again |
+| Wrong tenant | `404` — identical to a customer that does not exist, so the endpoint is not an existence oracle |
+| Audit | `customer.card_link_rotated` in `audit_log`, with **no token, URL or version** |
+
+The link is fetched on demand, not included in the customer profile response —
+otherwise every customer page load would put a working credential into a
+response nobody asked for.
+
+Verified against a running instance:
+
+```
+unauthenticated                        → 401
+merchant A rotates own customer        → 200, new link with v+1
+merchant B rotates A's customer (B id) → 404
+merchant B rotates A's customer (A id) → 403   (membership check fires first)
+old card link 200 → 400 · old wallet link → 403 · new link → 200
+customer status=active · balance unchanged · accounts unchanged
+```
+
+### What rotation does **not** revoke — read this before telling a merchant "it's revoked"
+
+An **already-installed Apple or Google pass keeps working.** It authenticates to
+the pass web service with `customers.wallet_auth_token`, a completely separate
+credential that rotation does not touch, and `buildPassContent` mints a fresh
+card token every time the pass updates — so the link embedded in the pass
+repairs itself on the next sync.
+
+Confirmed live, after rotating:
+
+```
+GET /api/v1/wallet/apple/v1/passes/…  Authorization: ApplePass <wallet_auth_token>
+  → 302   (still authorised; re-issues the pass)
+  → 401   with any other token
+```
+
+| Surface | After rotation |
+|---|---|
+| Browser card link (`/card/{token}`) | **Revoked** |
+| Wallet *download* link (`/api/v1/wallet/{apple,google}/{token}`) | **Revoked** |
+| Already-installed pass — updates, balance, stamps | **Keeps working** |
+| Link embedded in that installed pass | Dead until the next sync, then self-heals |
+
+So rotation answers "someone has the URL I emailed". It does **not** answer
+"someone has the phone with the pass on it" — there is no pass-revocation
+action today, and `wallet_auth_token` has no rotation path. That gap is real
+and is listed under remaining risks rather than papered over; the confirmation
+dialog says plainly that an installed pass keeps working.
+
 Before this existed the only lever was moving the customer out of
 `status = 'active'` — which the card route checks, and which also ends their
 membership. The responses to a leaked URL were "do nothing" or "delete the
@@ -216,6 +271,79 @@ the authorisation is the staff member's own authenticated, tenant-scoped
 session. Rejecting a rotated token there would stop a shop serving a customer
 standing in front of them, to prevent something the merchant's session already
 permits.
+
+---
+
+## What the public card actually exposes
+
+Taken from a live response, not from reading the types. Top-level keys:
+`business`, `customer`, `loyalty`, `claimable`, `gift_cards`, `memberships`,
+`wallet`.
+
+| Field | On the public card | Sensitive | Spendable secret |
+|---|---|---|---|
+| `business.*` (name, slug, colours, city, website) | yes | no | no |
+| `customer.name` (display name) | yes | **yes** — personal data | no |
+| `customer.id` | yes | low — opaque uuid | no |
+| `customer.member_since`, `is_vip` | yes | low | no |
+| `customer.referral_code` / `referral_url` | yes | low — meant to be shared | no |
+| `loyalty.programs[]` — balance, goal, progress, tier | yes | low | no |
+| `loyalty.availableRewards[]` — name, cost, affordability | yes | no | no |
+| `claimable[].name`, `expires_at` | yes | low | no |
+| **`claimable[].code`** | yes | **yes** | **YES** — redeems a reward |
+| **`gift_cards[].code`** | yes | **yes** | **YES** — spends money |
+| **`gift_cards[].remaining_value`**, `currency` | yes | **yes** — monetary | no |
+| `memberships[]` — plan name, perks, multiplier, renewal | yes | low | no |
+| `wallet.apple` / `wallet.google` | yes | yes — card-token URLs | no |
+
+Nothing else leaks: no email, no phone, no birthday, no address, no
+`business_id`, no transaction history, no notes.
+
+### The codes are deliberate, not an accident
+
+This was checked rather than assumed. `app/card/[token]/page.tsx` renders both
+in styled monospace blocks built for reading aloud at a counter (lines 195–197
+and 224–226), and the route carries a comment explaining the intent: *"A gift
+card someone bought them is money they already hold. Showing it on the card they
+actually open is the difference between it being spent and it quietly
+expiring."*
+
+That is a considered product decision, so the codes stay. A gift card the
+customer cannot show is a gift card that expires unspent — the card **is** the
+customer's wallet, and the same is true of the paper gift card it replaces.
+
+### Threat model
+
+> **Bearer possession equals access.** Anyone holding a card URL can read the
+> balance and the code of every active gift card on that customer, and the code
+> of every claimed reward — and can spend them. The link does not expire in any
+> practical sense (365 days) and is designed to be pasted into passes and
+> emails.
+>
+> **Rotation is the revocation mechanism.** It is a response to a suspected
+> leak, not a defence against one. Nothing detects a leak; a merchant has to be
+> told.
+>
+> **Stronger customer authentication is required before anything more
+> sensitive.** Stored value that can be topped up, payment instruments, identity
+> documents, or any operation that *moves* money rather than displaying a code,
+> needs per-session authorisation — not a longer-lived capability URL.
+
+### Hardening applied
+
+The three queries behind the sensitive half of this payload —
+`reward_redemptions`, `gift_cards`, `customer_memberships` — now filter on
+`business_id` as well as the customer.
+
+A customer belongs to exactly one workspace, so the customer filter alone is
+*currently* sufficient; that is a statement about today's data, not a boundary.
+Nothing in the schema stops a `gift_cards` row owned by one business from naming
+another business's customer as recipient — the foreign key proves the customer
+exists, not whose it is — and `db:verify` checks `reward_redemptions → customer`
+for exactly this drift while having **no equivalent check for `gift_cards →
+recipient_customer` or `customer_memberships → customer`**. The three most
+sensitive fields on a public, bearer-authenticated endpoint should not rest on
+that.
 
 ### The limitation, stated plainly
 

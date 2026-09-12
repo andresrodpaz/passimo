@@ -2139,6 +2139,18 @@ export const es: Dictionary = {
       summaryEmpty: 'Todavía no hay historial suficiente.',
       summaryFailed: 'Ahora mismo no hemos podido generar el resumen.',
       loyalty: 'Fidelización',
+      cardLink: 'Enlace de la tarjeta',
+      cardLinkBody:
+        'El enlace privado a la tarjeta de este cliente. Cualquiera que lo tenga puede abrirla, así que trátalo como una llave.',
+      cardLinkShow: 'Ver enlace de la tarjeta',
+      cardLinkRotate: 'Sustituir el enlace',
+      cardLinkRotateConfirm:
+        'El enlace actual deja de funcionar de inmediato y este cliente necesitará el nuevo. Sus sellos, recompensas y tarjetas regalo no se ven afectados, y un pase de wallet que ya tenga instalado sigue funcionando.',
+      cardLinkRotated:
+        'Listo: el enlace anterior ya no abre esta tarjeta. Comparte el nuevo desde aquí.',
+      cardLinkFailed: 'No hemos podido cargar el enlace de la tarjeta. Inténtalo de nuevo.',
+      cardLinkRotateFailed: 'No hemos podido sustituir el enlace. Inténtalo de nuevo.',
+      cardQrAlt: 'Código QR de la tarjeta de este cliente',
       rewards: 'Recompensas',
       rewardFallback: 'Recompensa',
       membership: 'Suscripción',
