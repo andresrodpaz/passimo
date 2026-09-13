@@ -204,6 +204,20 @@ union all
 select 'reward_redemptions → customer', count(*)
 from reward_redemptions x join customers y on y.id = x.customer_id where y.business_id <> x.business_id
 union all
+-- Gift cards and memberships were missing from this list, and they are the two
+-- that matter most on the public card: the public card endpoint serves a gift
+-- card's balance and its code -- money, and a spendable secret -- to a caller
+-- holding only a bearer URL. The foreign key on recipient_customer_id proves
+-- the customer exists, not whose it is, so nothing in the schema stops one
+-- workspace's gift card naming another workspace's customer as recipient. The
+-- route now filters on business_id; these detect the same drift arriving by
+-- another path.
+select 'gift_cards → recipient_customer', count(*)
+from gift_cards x join customers y on y.id = x.recipient_customer_id where y.business_id <> x.business_id
+union all
+select 'gift_cards → purchaser_customer', count(*)
+from gift_cards x join customers y on y.id = x.purchaser_customer_id where y.business_id <> x.business_id
+union all
 select 'reward_redemptions → reward', count(*)
 from reward_redemptions x join rewards y on y.id = x.reward_id where y.business_id <> x.business_id
 union all
@@ -354,6 +368,15 @@ from (
     + (select count(*) from customers x join locations y on y.id = x.signup_location_id where y.business_id <> x.business_id)
     + (select count(*) from customers x join customers y on y.id = x.referred_by where y.business_id <> x.business_id)
     + (select count(*) from customer_notes x join customers y on y.id = x.customer_id where y.business_id <> x.business_id)
+    -- Gift cards are money, and the public card serves their balance and code to
+    -- a bearer URL. They were listed in the detail query above but missing from
+    -- this sum, which is the number that actually gates a release -- so a
+    -- cross-tenant gift card was detectable only by someone reading the full
+    -- output, and reported PASS here. Verified by injecting one: this line is
+    -- what turns it into a FAIL.
+    + (select count(*) from gift_cards x join customers y on y.id = x.recipient_customer_id where y.business_id <> x.business_id)
+    + (select count(*) from gift_cards x join customers y on y.id = x.purchaser_customer_id where y.business_id <> x.business_id)
+    + (select count(*) from customer_memberships x join customers y on y.id = x.customer_id where y.business_id <> x.business_id)
     + (select count(*) from campaigns x join segments y on y.id = x.segment_id where y.business_id <> x.business_id)
     + (select count(*) from automations x join segments y on y.id = x.segment_id where y.business_id <> x.business_id)
     + (select count(*) from wallet_registrations x join customers y on y.id = x.customer_id where y.business_id <> x.business_id)

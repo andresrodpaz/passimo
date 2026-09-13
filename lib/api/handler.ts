@@ -232,10 +232,45 @@ export function defineRoute<
         log,
       })
 
-      const response =
-        result instanceof Response
-          ? withHeaders(result, { ...extraHeaders, 'X-Request-Id': requestId })
-          : json(result ?? { ok: true }, { headers: extraHeaders, requestId })
+      /*
+       * Nothing this API returns may be stored by a shared cache.
+       *
+       * Every response here is scoped to one tenant or one customer, and the
+       * most sensitive of them is public: `GET /api/v1/public/card/{token}`
+       * serves a gift card's balance and its code — money, and a spendable
+       * secret — to an anonymous caller holding a bearer URL. That response
+       * carried no cache directives at all, so it was governed by whatever
+       * default an intermediary chose. A per-token URL makes cross-user
+       * collision unlikely rather than impossible, and "unlikely" is not the
+       * standard for a monetary response.
+       *
+       * Set here rather than per route so a new endpoint is covered by
+       * construction — a default that has to be remembered is not a default.
+       *
+       * A route that genuinely wants to be cached sets its own `Cache-Control`
+       * on a `Response` it returns, and that wins: `withHeaders` overwrites
+       * what it is given, so the directive is only added when the response does
+       * not already carry one. (Nothing takes that path today —
+       * `/api/v1/public/qr`, the one cacheable endpoint, is hand-rolled and
+       * never reaches here — but the alternative is a trap for whoever writes
+       * the first one.)
+       */
+      const raw = result instanceof Response
+      const cacheHeaders: Record<string, string> =
+        raw && (result as Response).headers.has('Cache-Control')
+          ? {}
+          : { 'Cache-Control': 'no-store' }
+
+      const response = raw
+        ? withHeaders(result as Response, {
+            ...cacheHeaders,
+            ...extraHeaders,
+            'X-Request-Id': requestId,
+          })
+        : json(result ?? { ok: true }, {
+            headers: { ...cacheHeaders, ...extraHeaders },
+            requestId,
+          })
 
       log.info('request.completed', {
         status: response.status,

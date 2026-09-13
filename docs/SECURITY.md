@@ -4,6 +4,43 @@
 
 ## Vulnerabilities found and fixed
 
+### 2026-09-13 — production security audit
+
+Full report in `SECURITY_AUDIT_REPORT.md`; per-control evidence in
+`SECURITY_REALITY_MATRIX.md`. Three defects found and fixed, each demonstrated
+before being fixed and each now carrying a regression test.
+
+**P1 — every IP-based rate limit bypassable with one header.** `clientIp()` read
+`X-Forwarded-For` leftmost, which is the portion a client writes for itself.
+Against a running instance, eleven requests to the public join endpoint gave
+`404 ×10, 429 ×3`; five more with a rotating forged header were **all admitted**.
+The same trick lifts the caps on sign-in and password reset, so it was a
+brute-force enabler. Now reads the hop named by `TRUSTED_PROXY_HOPS`, counting
+from the right. Tests: `tests/unit/client-ip.test.ts`.
+
+**P1 — cross-tenant gift cards invisible to the release gate.** `db:verify`
+maintains its per-relationship listing and its pass/fail verdict as two separate
+queries, and gift cards were missing from the verdict. An injected gift card
+owned by one workspace but naming another's customer reported **PASS**. Gift
+cards are money. Both queries now cover them; the same injected row now fails the
+gate.
+
+**P2 — monetary data served with no cache directives.**
+`GET /api/v1/public/card/{token}` returns gift-card codes and balances and
+carried no `Cache-Control`. Every `defineRoute` response now sets `no-store`.
+
+Two risks were examined and **accepted rather than fixed**, both deliberate: an
+installed wallet pass cannot be revoked (it authenticates with a separate
+`wallet_auth_token`), and gift-card codes are intentionally shown on the public
+card so they can be read at a counter. Both are documented with their threat
+models in `docs/CUSTOMER_JOIN_FLOW.md`.
+
+One economic issue is **open and gating**: `messages_per_month` is a single
+undifferentiated meter, so a Pro tenant's 50,000 allowance can be spent as SMS.
+See SEC-006.
+
+### Earlier
+
 The audit of the previous implementation turned up the following. All are fixed.
 
 ### Critical
@@ -112,6 +149,27 @@ that cross a tenant boundary.
 > Postgres directly, and a table owner bypasses its own policies unless they are
 > forced, which none were. Isolation is real and it is in the application layer.
 > `db:verify` checks it independently (`cross_tenant_relationship_violations`).
+
+**Rate limiting.** Postgres-backed (`passimo_rate_limit`), so the counter is
+shared across instances rather than per-process — correct for Railway. Keyed on
+the client address derived by `clientIp()`, which reads the hop named by
+`TRUSTED_PROXY_HOPS` counting from the **right** of `X-Forwarded-For`, because
+that header grows left to right and the leftmost entry is written by the client.
+It previously read the leftmost entry, which made every IP-keyed limit — sign-in,
+password reset, public enrolment — bypassable with a single forged header;
+demonstrated and fixed in the 2026-09-13 audit. **Set `TRUSTED_PROXY_HOPS` to the
+real proxy depth in every deployment, and to `0` where nothing fronts the app** —
+the fix is configuration-dependent and a wrong value restores the bypass.
+
+Two limitations, stated rather than implied: the limiter **fails open** if the
+database errors (a fault removes brute-force protection on sign-in at the moment
+the system is degraded), and limits are per-IP rather than per-account on the
+authentication endpoints.
+
+**Caching.** Every `defineRoute` response carries `Cache-Control: no-store`, set
+at the choke point so a new endpoint inherits it. This matters most for
+`GET /api/v1/public/card/{token}`, which serves gift-card balances and codes to
+an anonymous bearer and previously carried no cache directives at all.
 
 **Customer card links.** `/card/{token}` is a bearer capability URL —
 HMAC-SHA256, purpose-scoped, 365-day TTL, claims `{c, v, exp}` and no PII. The

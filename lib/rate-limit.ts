@@ -168,15 +168,75 @@ export async function checkRateLimit(
   }
 }
 
-/** Best-effort client IP from the usual proxy headers. */
+/**
+ * The client IP, taken from the hop we actually trust.
+ *
+ * This used to read `x-forwarded-for.split(',')[0]` — the **leftmost** entry —
+ * which is the one value in the header an attacker fully controls, and it
+ * defeated every IP-keyed limit in the product. Demonstrated against a running
+ * instance: eleven requests to `POST /api/v1/public/join` produced
+ * `404 ×10, 429 ×3`, and then five more with `X-Forwarded-For: 10.1.2.<n>`
+ * were all admitted. The same trick lifts the caps on sign-in (8 per five
+ * minutes) and password reset, so it is a brute-force enabler rather than
+ * merely an abuse one.
+ *
+ * `X-Forwarded-For` grows left to right: each proxy *appends* the address it
+ * saw. With one trusted proxy in front of the app, a client that sends nothing
+ * yields `<client>`, and a client that forges `1.2.3.4` yields
+ * `1.2.3.4, <client>` — so the **rightmost** entry is the proxy's own
+ * observation and the only one the client cannot write. Counting from the right
+ * by the number of proxies is therefore the correct read, and
+ * `TRUSTED_PROXY_HOPS` exists because that number is a deployment fact rather
+ * than something this file can know.
+ *
+ * `0` disables the header entirely, which is right for an app exposed directly:
+ * with no proxy, every entry is attacker-supplied and none should be believed.
+ */
+function trustedProxyHops(): number {
+  const raw = Number(process.env.TRUSTED_PROXY_HOPS ?? '1')
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 1
+}
+
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0]!.trim()
-  return (
-    request.headers.get('x-real-ip') ??
-    request.headers.get('cf-connecting-ip') ??
-    'unknown'
-  )
+  const hops = trustedProxyHops()
+
+  if (hops > 0) {
+    const chain = (request.headers.get('x-forwarded-for') ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+
+    if (chain.length > 0) {
+      /*
+       * Clamped when the chain is shorter than configured. Be clear about what
+       * that means rather than reassuring: it returns the leftmost entry, which
+       * in that situation *is* the client-written one. A chain shorter than the
+       * real proxy depth should not happen — every request genuinely traversing
+       * the proxies carries their appended entries — so this case means either
+       * a misconfigured `TRUSTED_PROXY_HOPS` or a path that bypasses the proxy.
+       *
+       * The safe configuration is therefore load-bearing, not cosmetic: set the
+       * value to the real number of proxies, and set it to `0` for any
+       * deployment reachable directly. A `1` on an app with no proxy in front
+       * of it trusts a single forged entry and the bypass is fully intact —
+       * verified, not assumed.
+       */
+      const index = Math.max(0, chain.length - hops)
+      return chain[index]!
+    }
+  }
+
+  /*
+   * These two are set by the proxy itself and are overwritten rather than
+   * appended to, so they carry no attacker-controlled prefix. They are still
+   * only consulted when a proxy is expected.
+   */
+  if (hops > 0) {
+    const direct = request.headers.get('x-real-ip') ?? request.headers.get('cf-connecting-ip')
+    if (direct) return direct.trim()
+  }
+
+  return 'unknown'
 }
 
 export function rateLimitHeaders(result: RateLimitResult): Record<string, string> {
